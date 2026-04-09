@@ -1,133 +1,63 @@
-# Crypto Portfolio Tracker
+# crypto portfolio tracker
 
-A production-ready cryptocurrency portfolio tracker built with Next.js, Firebase, and Ethers.js.
+track your crypto holdings with real-time prices and on-chain data.
 
-## Features
+## what it does
 
-- 🔐 **Authentication** - Firebase Auth with email/password
-- 💰 **Live Prices** - Real-time crypto prices from CoinGecko API
-- 📊 **Portfolio Management** - Track your crypto holdings with PnL calculations
-- 🔗 **Blockchain Integration** - Read wallet balances directly from Ethereum blockchain
-- 📈 **Historical Charts** - Interactive price charts with Recharts
-- 🎨 **Modern UI** - Dark theme with Tailwind CSS
+- live crypto prices from coingecko
+- portfolio tracking with pnl calculations
+- read wallet balances directly from ethereum blockchain
+- historical price charts
+- firebase auth + firestore
 
-## Tech Stack
+## stack
 
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Authentication & Database**: Firebase v10
-- **Blockchain**: Ethers.js v6 + Infura
-- **Charts**: Recharts
-- **Price API**: CoinGecko API v3
+next.js 16 · typescript · tailwind · firebase · ethers.js · recharts
 
-## Getting Started
+## setup
 
-### Prerequisites
-
-- Node.js 18+ 
-- Firebase account
-- Infura account (for blockchain features)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/0xMochamad-Arif-Fahrizal/Crypto-Portfolio-Tracker.git
-cd Crypto-Portfolio-Tracker
-```
-
-2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Create `.env.local` file in the root directory:
-```env
-# Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+create `.env.local`:
 
-# Server-only
-INFURA_API_KEY=your_infura_project_id
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+
+INFURA_API_KEY=
 USDT_CONTRACT_ADDRESS=0xdAC17F958D2ee523a2206206994597C13D831ec7
 ```
 
-4. Run the development server:
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+## features
 
-## Project Structure
+**auth** - email/password with firebase
 
-```
-crypto-portfolio/
-├── app/
-│   ├── (auth)/          # Authentication pages
-│   ├── api/             # API routes
-│   ├── dashboard/       # Dashboard page
-│   ├── portfolio/       # Portfolio management
-│   ├── wallet/          # Blockchain wallet viewer
-│   └── history/         # Price charts
-├── components/          # Reusable components
-├── lib/
-│   ├── api/            # API utilities
-│   ├── context/        # React contexts
-│   ├── firebase/       # Firebase config
-│   └── firestore/      # Firestore operations
-└── .kiro/              # Kiro steering files
-```
+**dashboard** - live prices for btc, eth, usdt, bnb, sol
 
-## Features Overview
+**portfolio** - add assets, track pnl, see total value
 
-### Authentication
-- Email/password registration and login
-- Protected routes with middleware
-- Session management with Firebase Auth
+**wallet** - check any ethereum address balance (eth + usdt)
 
-### Portfolio Management
-- Add/edit/delete crypto assets
-- Real-time PnL calculations
-- Portfolio summary with total value and ROI
+**history** - price charts with 7d/30d/90d views
 
-### Blockchain Integration
-- Read ETH and USDT balances from any Ethereum address
-- Direct blockchain queries via Infura
-- No wallet connection required
+## deploy
 
-### Historical Charts
-- Interactive price charts for BTC, ETH, USDT
-- Multiple timeframes: 7D, 30D, 90D
-- Responsive design with Recharts
+works on vercel out of the box. just add env vars and deploy.
 
-## Deployment
+## notes
 
-### Deploy to Vercel
+- usdt uses 6 decimals, not 18
+- coingecko free tier has rate limits
+- infura needed for blockchain reads
 
-1. Push your code to GitHub
-2. Import project to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy
-
-The app will be live at `https://your-project.vercel.app`
-
-## Security
-
-- Firebase Security Rules configured for data isolation
-- API keys stored in environment variables
-- Server-side API routes for external calls
-- Protected routes with authentication checks
-
-## License
-
-MIT
-
-## Author
-
-Mochamad Arif Fahrizal
+built for learning and portfolio purposes.
