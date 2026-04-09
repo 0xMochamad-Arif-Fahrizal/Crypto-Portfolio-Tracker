@@ -61,3 +61,5 @@ works on vercel out of the box. just add env vars and deploy.
 - infura needed for blockchain reads
 
 built for learning and portfolio purposes.
+
+
