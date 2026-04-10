@@ -59,8 +59,35 @@ export async function GET(request: NextRequest) {
     // CRITICAL: Use BigInt division with 10^6
     const usdtBalance = (BigInt(usdtBalanceRaw.toString()) / 10n ** 6n).toString();
 
+    // Fetch current prices from CoinGecko
+    let ethPrice = 0;
+    let usdtPrice = 1; // USDT is always ~$1
+    
+    try {
+      const priceResponse = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
+      );
+      if (priceResponse.ok) {
+        const priceData = await priceResponse.json();
+        ethPrice = priceData.ethereum?.usd || 0;
+      }
+    } catch (priceError) {
+      console.error('Failed to fetch ETH price:', priceError);
+    }
+
+    // Calculate USD values
+    const ethValueUSD = parseFloat(ethBalance) * ethPrice;
+    const usdtValueUSD = parseFloat(usdtBalance) * usdtPrice;
+    const totalValueUSD = ethValueUSD + usdtValueUSD;
+
     return NextResponse.json({
       address,
+      ethBalance: ethBalance,
+      usdtBalance: usdtBalance,
+      ethValueUSD,
+      usdtValueUSD,
+      totalValueUSD,
+      // Legacy fields for backward compatibility
       eth: ethBalance,
       usdt: usdtBalance,
     });

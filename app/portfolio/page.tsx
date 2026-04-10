@@ -176,6 +176,12 @@ export default function PortfolioPage() {
                 >
                   History
                 </Link>
+                <Link 
+                  href="/integrated" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Integrated
+                </Link>
               </nav>
             </div>
             <button
