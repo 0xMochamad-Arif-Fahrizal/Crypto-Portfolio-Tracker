@@ -31,19 +31,19 @@ export default function AllocationDonutChart({
     { name: 'BTC', value: safeBTC, percentage: total > 0 ? (safeBTC / total) * 100 : 0 },
     { name: 'ETH', value: safeETH, percentage: total > 0 ? (safeETH / total) * 100 : 0 },
     { name: 'USDT', value: safeUSDT, percentage: total > 0 ? (safeUSDT / total) * 100 : 0 },
-  ].filter(item => item.value > 0); // Only show coins with value
+  ].filter(item => item.value > 0);
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 rounded shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800">{data.name}</p>
-          <p className="text-sm text-gray-600">
+        <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg font-mono">
+          <p className="font-bold text-white text-sm">{data.name}</p>
+          <p className="text-xs text-zinc-400 mt-1">
             ${data.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-zinc-500 font-bold">
             {data.percentage.toFixed(1)}%
           </p>
         </div>
@@ -56,19 +56,24 @@ export default function AllocationDonutChart({
   const renderLegend = (props: any) => {
     const { payload } = props;
     return (
-      <div className="flex flex-col gap-2 mt-4">
+      <div className="flex flex-col gap-3 mt-6">
         {payload.map((entry: any, index: number) => (
-          <div key={`legend-${index}`} className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div key={`legend-${index}`} className="flex items-center justify-between font-mono">
+            <div className="flex items-center gap-3">
               <div 
-                className="w-3 h-3 rounded-full" 
+                className="w-4 h-4 rounded" 
                 style={{ backgroundColor: entry.color }}
               />
-              <span className="text-sm font-medium text-gray-700">{entry.value}</span>
+              <span className="text-sm font-bold text-white">{entry.value}</span>
             </div>
-            <span className="text-sm text-gray-600">
-              {entry.payload.percentage.toFixed(1)}%
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-zinc-400">
+                ${entry.payload.value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </span>
+              <span className="text-sm text-white font-bold min-w-[3rem] text-right">
+                {entry.payload.percentage.toFixed(1)}%
+              </span>
+            </div>
           </div>
         ))}
       </div>
@@ -77,9 +82,11 @@ export default function AllocationDonutChart({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-lg p-6 shadow border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Asset Allocation</h3>
-        <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 font-mono">
+          Asset Allocation
+        </h3>
+        <div className="flex items-center justify-center h-64 text-zinc-600 font-mono text-sm">
           <p>No assets to display</p>
         </div>
       </div>
@@ -87,8 +94,10 @@ export default function AllocationDonutChart({
   }
 
   return (
-    <div className="bg-white rounded-lg p-6 shadow border border-gray-200">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Asset Allocation</h3>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
+      <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 font-mono">
+        Asset Allocation
+      </h3>
       
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
@@ -100,6 +109,8 @@ export default function AllocationDonutChart({
             outerRadius={90}
             paddingAngle={5}
             dataKey="value"
+            stroke="#18181b"
+            strokeWidth={2}
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[entry.name as keyof typeof COLORS]} />

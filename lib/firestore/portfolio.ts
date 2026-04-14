@@ -42,6 +42,17 @@ export interface Transaction {
   notes?: string;
 }
 
+export interface WalletCostBasis {
+  id?: string; // Firestore document ID
+  userId: string;
+  walletAddress: string;
+  coinSymbol: 'ETH' | 'USDT'; // Only ETH and USDT supported
+  averageBuyPrice: number; // Average purchase price in USD
+  totalInvested: number; // Total USD invested
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Add or update a portfolio asset
  * If asset exists, updates the amount and average buy price
@@ -201,4 +212,102 @@ export function calculatePortfolioSummary(
     totalPnL,
     totalPnLPercentage,
   };
+}
+
+/**
+ * Save or update wallet cost basis for a specific coin
+ */
+export async function saveWalletCostBasis(
+  userId: string,
+  walletAddress: string,
+  coinSymbol: 'ETH' | 'USDT',
+  averageBuyPrice: number,
+  totalInvested: number
+): Promise<void> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const costBasisRef = doc(db, 'walletCostBasis', userId, 'coins', coinSymbol);
+  const costBasisSnap = await getDoc(costBasisRef);
+
+  if (costBasisSnap.exists()) {
+    // Update existing cost basis
+    await updateDoc(costBasisRef, {
+      walletAddress,
+      averageBuyPrice,
+      totalInvested,
+      updatedAt: Timestamp.now(),
+    });
+  } else {
+    // Create new cost basis
+    const newCostBasis: Omit<WalletCostBasis, 'id'> = {
+      userId,
+      walletAddress,
+      coinSymbol,
+      averageBuyPrice,
+      totalInvested,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await setDoc(costBasisRef, newCostBasis);
+  }
+}
+
+/**
+ * Get wallet cost basis for all coins
+ */
+export async function getWalletCostBasis(userId: string): Promise<Record<string, WalletCostBasis>> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const costBasisRef = collection(db, 'walletCostBasis', userId, 'coins');
+  const snapshot = await getDocs(costBasisRef);
+
+  const costBasisMap: Record<string, WalletCostBasis> = {};
+  
+  snapshot.docs.forEach(doc => {
+    const data = doc.data();
+    costBasisMap[doc.id] = {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+    } as WalletCostBasis;
+  });
+
+  return costBasisMap;
+}
+
+/**
+ * Get wallet cost basis for a specific coin
+ */
+export async function getWalletCostBasisForCoin(
+  userId: string,
+  coinSymbol: 'ETH' | 'USDT'
+): Promise<WalletCostBasis | null> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const costBasisRef = doc(db, 'walletCostBasis', userId, 'coins', coinSymbol);
+  const costBasisSnap = await getDoc(costBasisRef);
+
+  if (!costBasisSnap.exists()) return null;
+
+  return {
+    id: costBasisSnap.id,
+    ...costBasisSnap.data(),
+    createdAt: costBasisSnap.data().createdAt?.toDate() || new Date(),
+    updatedAt: costBasisSnap.data().updatedAt?.toDate() || new Date(),
+  } as WalletCostBasis;
+}
+
+/**
+ * Delete wallet cost basis for a specific coin
+ */
+export async function deleteWalletCostBasis(
+  userId: string,
+  coinSymbol: 'ETH' | 'USDT'
+): Promise<void> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const costBasisRef = doc(db, 'walletCostBasis', userId, 'coins', coinSymbol);
+  await deleteDoc(costBasisRef);
 }

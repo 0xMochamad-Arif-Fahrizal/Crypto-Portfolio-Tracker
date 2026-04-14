@@ -108,8 +108,8 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-      <h2 className="text-xl font-semibold mb-4">Add Asset to Portfolio</h2>
+    <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 card-glow">
+      <h2 className="text-xl font-semibold mb-4 font-mono">Add Asset to Portfolio</h2>
 
       {error && (
         <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded text-red-300 text-sm">
@@ -121,7 +121,7 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
         {/* Coin Search */}
         {!selectedCoin ? (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-zinc-500 mb-2 font-mono uppercase tracking-wider">
               Search Cryptocurrency
             </label>
             <div className="flex gap-2">
@@ -131,13 +131,13 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSearch())}
                 placeholder="e.g., Bitcoin, Ethereum"
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-2 bg-black border border-zinc-800 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
               />
               <button
                 type="button"
                 onClick={handleSearch}
                 disabled={searching || !searchQuery.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md text-sm font-medium transition-colors font-mono"
               >
                 {searching ? 'Searching...' : 'Search'}
               </button>
@@ -145,18 +145,18 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
 
             {/* Search Results */}
             {searchResults.length > 0 && (
-              <div className="mt-2 bg-gray-700 rounded-md border border-gray-600 max-h-60 overflow-y-auto">
+              <div className="mt-2 bg-zinc-800 rounded-md border border-zinc-800 max-h-60 overflow-y-auto">
                 {searchResults.map((coin) => (
                   <button
                     key={coin.id}
                     type="button"
                     onClick={() => handleSelectCoin(coin)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-600 transition-colors text-left"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-700 transition-colors text-left"
                   >
                     <img src={coin.thumb} alt={coin.name} className="w-6 h-6 rounded-full" />
                     <div>
-                      <p className="text-white font-medium">{coin.name}</p>
-                      <p className="text-sm text-gray-400 uppercase">{coin.symbol}</p>
+                      <p className="text-white font-medium font-mono">{coin.name}</p>
+                      <p className="text-sm text-gray-400 uppercase font-mono">{coin.symbol}</p>
                     </div>
                   </button>
                 ))}
@@ -165,18 +165,18 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
           </div>
         ) : (
           /* Selected Coin Display */
-          <div className="flex items-center justify-between p-3 bg-gray-700 rounded-md">
+          <div className="flex items-center justify-between p-3 bg-zinc-800 rounded-md">
             <div className="flex items-center gap-3">
               <img src={selectedCoin.thumb} alt={selectedCoin.name} className="w-8 h-8 rounded-full" />
               <div>
-                <p className="text-white font-medium">{selectedCoin.name}</p>
-                <p className="text-sm text-gray-400 uppercase">{selectedCoin.symbol}</p>
+                <p className="text-white font-medium font-mono">{selectedCoin.name}</p>
+                <p className="text-sm text-gray-400 uppercase font-mono">{selectedCoin.symbol}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setSelectedCoin(null)}
-              className="text-sm text-red-400 hover:text-red-300"
+              className="text-sm text-red-400 hover:text-red-300 font-mono"
             >
               Change
             </button>
@@ -185,7 +185,7 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
 
         {/* Amount Input */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-zinc-500 mb-2 font-mono uppercase tracking-wider">
             Amount
           </label>
           <input
@@ -195,13 +195,13 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
             required
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
           />
         </div>
 
         {/* Buy Price Input */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-zinc-500 mb-2 font-mono uppercase tracking-wider">
             Buy Price (USD)
           </label>
           <input
@@ -211,15 +211,15 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
             onChange={(e) => setBuyPrice(e.target.value)}
             placeholder="0.00"
             required
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
           />
         </div>
 
         {/* Total Value Display */}
         {amount && buyPrice && !isNaN(parseFloat(amount)) && !isNaN(parseFloat(buyPrice)) && (
-          <div className="p-3 bg-gray-700 rounded-md">
-            <p className="text-sm text-gray-400">Total Investment</p>
-            <p className="text-xl font-semibold text-white">
+          <div className="p-3 bg-zinc-800 rounded-md">
+            <p className="text-sm text-zinc-500 font-mono uppercase tracking-wider">Total Investment</p>
+            <p className="text-xl font-semibold text-white font-mono">
               ${(parseFloat(amount) * parseFloat(buyPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
@@ -230,14 +230,14 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition-colors"
+            className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-md text-sm font-medium transition-colors font-mono"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading || !selectedCoin}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md text-sm font-medium transition-colors"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md text-sm font-medium transition-colors font-mono"
           >
             {loading ? 'Adding...' : 'Add Asset'}
           </button>

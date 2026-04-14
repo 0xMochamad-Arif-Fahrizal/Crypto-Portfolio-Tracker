@@ -9,8 +9,8 @@ interface PriceCardProps {
 
 export default function PriceCard({ coin }: PriceCardProps) {
   const isPositive = coin.price_change_percentage_24h >= 0;
-  const priceChangeColor = isPositive ? 'text-green-500' : 'text-red-500';
-  const priceChangeBg = isPositive ? 'bg-green-500/10' : 'bg-red-500/10';
+  const priceChangeColor = isPositive ? 'text-emerald-400' : 'text-red-400';
+  const priceChangeBg = isPositive ? 'bg-emerald-400/10' : 'bg-red-400/10';
 
   // Format large numbers (market cap, volume)
   const formatLargeNumber = (num: number): string => {
@@ -28,7 +28,7 @@ export default function PriceCard({ coin }: PriceCardProps) {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+    <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 card-glow transition-colors">
       {/* Header: Logo + Name + Symbol */}
       <div className="flex items-center gap-3 mb-4">
         <Image
@@ -39,35 +39,35 @@ export default function PriceCard({ coin }: PriceCardProps) {
           className="rounded-full"
         />
         <div>
-          <h3 className="text-lg font-semibold text-white">{coin.name}</h3>
-          <p className="text-sm text-gray-400 uppercase">{coin.symbol}</p>
+          <h3 className="text-lg font-semibold text-white font-mono">{coin.name}</h3>
+          <p className="text-sm text-zinc-500 uppercase tracking-wider font-mono">{coin.symbol}</p>
         </div>
       </div>
 
       {/* Current Price */}
       <div className="mb-3">
-        <p className="text-3xl font-bold text-white">
+        <p className="text-3xl font-bold text-white font-mono">
           {formatPrice(coin.current_price)}
         </p>
       </div>
 
       {/* 24h Change */}
       <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${priceChangeBg} mb-4`}>
-        <span className={`text-sm font-medium ${priceChangeColor}`}>
+        <span className={`text-sm font-medium font-mono ${priceChangeColor}`}>
           {isPositive ? '▲' : '▼'} {Math.abs(coin.price_change_percentage_24h).toFixed(2)}%
         </span>
-        <span className="text-xs text-gray-400">24h</span>
+        <span className="text-xs text-zinc-500 font-mono">24h</span>
       </div>
 
       {/* Market Stats */}
-      <div className="space-y-2 pt-4 border-t border-gray-700">
+      <div className="space-y-2 pt-4 border-t border-zinc-800">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Market Cap</span>
-          <span className="text-white font-medium">{formatLargeNumber(coin.market_cap)}</span>
+          <span className="text-zinc-500 uppercase tracking-wider font-mono">Market Cap</span>
+          <span className="text-white font-medium font-mono">{formatLargeNumber(coin.market_cap)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Volume (24h)</span>
-          <span className="text-white font-medium">{formatLargeNumber(coin.total_volume)}</span>
+          <span className="text-zinc-500 uppercase tracking-wider font-mono">Volume (24h)</span>
+          <span className="text-white font-medium font-mono">{formatLargeNumber(coin.total_volume)}</span>
         </div>
       </div>
     </div>

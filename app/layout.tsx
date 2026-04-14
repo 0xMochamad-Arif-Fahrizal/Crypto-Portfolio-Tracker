@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Courier_Prime } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/context/AuthContext";
 
-const inter = Inter({
+const courierPrime = Courier_Prime({
+  weight: ['400', '700'],
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-courier",
 });
 
 export const metadata: Metadata = {
@@ -19,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <body className="min-h-screen bg-gray-900 text-white antialiased" suppressHydrationWarning>
+    <html lang="en" className={courierPrime.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-black text-white antialiased" suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

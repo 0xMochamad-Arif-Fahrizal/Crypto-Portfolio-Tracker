@@ -45,11 +45,38 @@ export async function GET(request: NextRequest) {
     // Create USDT contract instance
     const usdtContract = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
 
-    // Fetch ETH and USDT balances in parallel
-    const [ethBalanceRaw, usdtBalanceRaw] = await Promise.all([
-      provider.getBalance(address),
-      usdtContract.balanceOf(address),
-    ]);
+    // Fetch ETH and USDT balances in parallel with retry logic
+    let ethBalanceRaw;
+    let usdtBalanceRaw;
+    
+    try {
+      [ethBalanceRaw, usdtBalanceRaw] = await Promise.all([
+        provider.getBalance(address),
+        usdtContract.balanceOf(address),
+      ]);
+      
+      console.log('Blockchain read success:', {
+        address,
+        ethBalanceRaw: ethBalanceRaw.toString(),
+        usdtBalanceRaw: usdtBalanceRaw.toString(),
+      });
+    } catch (balanceError) {
+      console.error('Failed to fetch balances, retrying...', balanceError);
+      
+      // Retry once after 1 second
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      [ethBalanceRaw, usdtBalanceRaw] = await Promise.all([
+        provider.getBalance(address),
+        usdtContract.balanceOf(address),
+      ]);
+      
+      console.log('Blockchain read success (retry):', {
+        address,
+        ethBalanceRaw: ethBalanceRaw.toString(),
+        usdtBalanceRaw: usdtBalanceRaw.toString(),
+      });
+    }
 
     // Convert balances
     // ETH: 18 decimals - use formatEther
@@ -70,6 +97,7 @@ export async function GET(request: NextRequest) {
       if (priceResponse.ok) {
         const priceData = await priceResponse.json();
         ethPrice = priceData.ethereum?.usd || 0;
+        console.log('ETH price fetched:', ethPrice);
       }
     } catch (priceError) {
       console.error('Failed to fetch ETH price:', priceError);
@@ -79,6 +107,14 @@ export async function GET(request: NextRequest) {
     const ethValueUSD = parseFloat(ethBalance) * ethPrice;
     const usdtValueUSD = parseFloat(usdtBalance) * usdtPrice;
     const totalValueUSD = ethValueUSD + usdtValueUSD;
+
+    console.log('Final wallet data:', {
+      ethBalance,
+      usdtBalance,
+      ethValueUSD,
+      usdtValueUSD,
+      totalValueUSD,
+    });
 
     return NextResponse.json({
       address,

@@ -131,8 +131,11 @@ export default function PortfolioPage() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="text-zinc-600 text-sm font-mono">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -144,41 +147,43 @@ export default function PortfolioPage() {
   const summary = calculatePortfolioSummary(assets, currentPrices);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
+      <header className="bg-zinc-900 border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <h1 className="text-2xl font-bold">Crypto Portfolio</h1>
-              <nav className="flex gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+              <h1 className="text-xl sm:text-2xl font-bold text-white font-mono uppercase tracking-wider">
+                CRYPTO PORTFOLIO
+              </h1>
+              <nav className="flex flex-wrap gap-4 text-sm font-mono">
                 <Link 
                   href="/dashboard" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Dashboard
                 </Link>
                 <Link 
                   href="/portfolio" 
-                  className="text-white font-medium"
+                  className="text-white font-bold"
                 >
                   Portfolio
                 </Link>
                 <Link 
                   href="/wallet" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Wallet
                 </Link>
                 <Link 
                   href="/history" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   History
                 </Link>
                 <Link 
                   href="/integrated" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Integrated
                 </Link>
@@ -186,7 +191,7 @@ export default function PortfolioPage() {
             </div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm font-mono transition-colors"
             >
               Logout
             </button>
@@ -195,25 +200,25 @@ export default function PortfolioPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-xl font-semibold">My Portfolio</h2>
-            <p className="text-sm text-gray-400 mt-1">{user.email}</p>
+            <h2 className="text-xl font-semibold font-mono uppercase tracking-wider">MY PORTFOLIO</h2>
+            <p className="text-sm text-zinc-500 mt-1 font-mono">{user.email}</p>
           </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-mono font-bold transition-colors"
           >
-            {showAddForm ? 'Cancel' : '+ Add Asset'}
+            {showAddForm ? 'CANCEL' : '+ ADD ASSET'}
           </button>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-500 rounded-lg">
-            <p className="text-red-300">{error}</p>
+          <div className="mb-6 p-4 bg-red-950 border border-red-800 rounded-lg font-mono">
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
@@ -230,8 +235,9 @@ export default function PortfolioPage() {
 
         {/* Loading State */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="flex flex-col items-center justify-center py-12 font-mono">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+            <p className="text-zinc-600 text-sm">Loading portfolio...</p>
           </div>
         ) : (
           <>

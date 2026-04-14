@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import Link from 'next/link';
 
 // Firestore
-import { getUserAssets, PortfolioAsset } from '@/lib/firestore/portfolio';
+import { getUserAssets, PortfolioAsset, getWalletCostBasis, saveWalletCostBasis, WalletCostBasis } from '@/lib/firestore/portfolio';
 
 // API
 import { fetchCoinPrices } from '@/lib/api/coingecko';
@@ -44,6 +44,10 @@ export default function IntegratedPage() {
     totalWalletValue: 0,
     isLoaded: false,
   });
+  
+  // State for wallet cost basis
+  const [walletCostBasis, setWalletCostBasis] = useState<Record<string, WalletCostBasis>>({});
+  const [analyzingTransactions, setAnalyzingTransactions] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,15 +108,73 @@ export default function IntegratedPage() {
 
   // Load wallet portfolio from Blockchain
   const loadWalletPortfolio = async (address: string) => {
-    if (!address) return;
+    if (!address || !user) return;
 
     try {
+      setAnalyzingTransactions(true);
+      setError(null);
+
+      // Step 1: Fetch current balances
       const response = await fetch(`/api/wallet?address=${address}`);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch wallet data');
       }
+
+      // Step 2: Analyze transaction history to calculate cost basis
+      console.log('Analyzing transaction history...');
+      const analysisResponse = await fetch(`/api/wallet/analyze?address=${address}`);
+      
+      let ethCostBasis = 0;
+      let usdtCostBasis = 0;
+
+      if (analysisResponse.ok) {
+        const analysisData = await analysisResponse.json();
+        console.log('Transaction analysis result:', analysisData);
+
+        ethCostBasis = analysisData.eth?.totalInvested || 0;
+        usdtCostBasis = analysisData.usdt?.totalInvested || 0;
+
+        // Save to Firebase for future use
+        if (ethCostBasis > 0) {
+          await saveWalletCostBasis(user.uid, address, 'ETH', 0, ethCostBasis);
+        }
+        if (usdtCostBasis > 0) {
+          await saveWalletCostBasis(user.uid, address, 'USDT', 0, usdtCostBasis);
+        }
+
+        // Update local state
+        const costBasis = await getWalletCostBasis(user.uid);
+        setWalletCostBasis(costBasis);
+      } else {
+        console.warn('Failed to analyze transactions, loading saved cost basis...');
+        // Fallback to saved cost basis
+        const costBasis = await getWalletCostBasis(user.uid);
+        setWalletCostBasis(costBasis);
+        ethCostBasis = costBasis.ETH?.totalInvested || 0;
+        usdtCostBasis = costBasis.USDT?.totalInvested || 0;
+      }
+
+      // Calculate P&L
+      const ethPnL = data.ethValueUSD - ethCostBasis;
+      const usdtPnL = data.usdtValueUSD - usdtCostBasis;
+      const totalWalletPnL = ethPnL + usdtPnL;
+
+      console.log('=== Wallet P&L Calculation ===');
+      console.log('ETH:', {
+        balance: data.ethBalance,
+        currentValue: data.ethValueUSD,
+        costBasis: ethCostBasis,
+        pnl: ethPnL,
+      });
+      console.log('USDT:', {
+        balance: data.usdtBalance,
+        currentValue: data.usdtValueUSD,
+        costBasis: usdtCostBasis,
+        pnl: usdtPnL,
+      });
+      console.log('Total Wallet P&L:', totalWalletPnL);
 
       // Ensure all fields have valid values
       setWalletData({
@@ -122,10 +184,18 @@ export default function IntegratedPage() {
         usdtValueUSD: data.usdtValueUSD || 0,
         totalWalletValue: data.totalValueUSD || 0,
         isLoaded: true,
+        ethCostBasis,
+        usdtCostBasis,
+        ethPnL,
+        usdtPnL,
+        totalWalletPnL,
       });
+
+      setAnalyzingTransactions(false);
     } catch (err) {
       console.error('Failed to load wallet portfolio:', err);
       setError('Failed to load wallet data');
+      setAnalyzingTransactions(false);
       // Reset to safe defaults on error
       setWalletData({
         ethBalance: '0',
@@ -218,41 +288,43 @@ export default function IntegratedPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
+      <header className="bg-zinc-900 border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <h1 className="text-2xl font-bold">Crypto Portfolio</h1>
-              <nav className="flex gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+              <h1 className="text-xl sm:text-2xl font-bold text-white font-mono">
+                CRYPTO PORTFOLIO
+              </h1>
+              <nav className="flex flex-wrap gap-4 text-sm font-mono">
                 <Link 
                   href="/dashboard" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Dashboard
                 </Link>
                 <Link 
                   href="/portfolio" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Portfolio
                 </Link>
                 <Link 
                   href="/wallet" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   Wallet
                 </Link>
                 <Link 
                   href="/history" 
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-white transition-colors"
                 >
                   History
                 </Link>
                 <Link 
                   href="/integrated" 
-                  className="text-white font-medium"
+                  className="text-white font-bold"
                 >
                   Integrated
                 </Link>
@@ -260,7 +332,7 @@ export default function IntegratedPage() {
             </div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm font-mono transition-colors"
             >
               Logout
             </button>
@@ -269,51 +341,59 @@ export default function IntegratedPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Page Header */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold">Integrated Portfolio</h2>
-          <p className="text-sm text-gray-400 mt-1">
+        <div className="mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white font-mono mb-2">
+            Integrated Portfolio
+          </h2>
+          <p className="text-sm text-zinc-500 font-mono">
             Combined view of manual assets and on-chain wallet
           </p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-500 rounded-lg">
-            <p className="text-red-300">{error}</p>
+          <div className="mb-6 p-4 bg-red-950 border border-red-800 rounded-lg font-mono">
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
         {/* Wallet Address Input */}
-        <div className="mb-6 bg-gray-800 rounded-lg p-4">
-          <label className="block text-sm font-medium mb-2">
-            Ethereum Wallet Address (Optional)
+        <div className="mb-8 bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
+          <label className="block text-sm font-bold text-white uppercase tracking-wider font-mono mb-3">
+            Ethereum Wallet Address
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
               placeholder="0x..."
-              className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={analyzingTransactions}
+              className="flex-1 px-4 py-3 bg-black border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={handleCheckWallet}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-medium transition-colors"
+              disabled={analyzingTransactions}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-bold transition-colors font-mono whitespace-nowrap disabled:bg-blue-800 disabled:cursor-not-allowed"
             >
-              Load Wallet
+              {analyzingTransactions ? 'Analyzing...' : 'Load Wallet'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Enter your Ethereum address to include on-chain ETH and USDT balances
+          <p className="text-xs text-zinc-600 mt-3 font-mono">
+            {analyzingTransactions 
+              ? '🔍 Analyzing transaction history to calculate cost basis automatically...'
+              : 'Enter your Ethereum address to include on-chain ETH and USDT balances with automatic cost basis calculation'
+            }
           </p>
         </div>
 
         {/* Loading State */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="flex flex-col items-center justify-center py-16 font-mono">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+            <p className="text-zinc-600 text-sm">Loading data...</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -332,6 +412,70 @@ export default function IntegratedPage() {
               walletValue={walletData.totalWalletValue}
               dataCompleteness={integratedSummary.dataCompleteness}
             />
+
+            {/* Wallet Cost Basis Debug Info (only show if wallet loaded) */}
+            {walletData.isLoaded && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
+                <h3 className="text-lg font-bold text-white font-mono mb-4 uppercase tracking-wider">
+                  Wallet Cost Basis Breakdown
+                </h3>
+                <div className="space-y-3 font-mono text-sm">
+                  {/* ETH */}
+                  <div className="border-b border-zinc-800 pb-3">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">ETH Balance:</span>
+                      <span className="text-white">{parseFloat(walletData.ethBalance).toFixed(4)} ETH</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">ETH Current Value:</span>
+                      <span className="text-white">${walletData.ethValueUSD.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">ETH Cost Basis:</span>
+                      <span className="text-white">${(walletData.ethCostBasis || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">ETH P&L:</span>
+                      <span className={walletData.ethPnL && walletData.ethPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                        ${(walletData.ethPnL || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* USDT */}
+                  <div className="border-b border-zinc-800 pb-3">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">USDT Balance:</span>
+                      <span className="text-white">{parseFloat(walletData.usdtBalance).toFixed(2)} USDT</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">USDT Current Value:</span>
+                      <span className="text-white">${walletData.usdtValueUSD.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-500">USDT Cost Basis:</span>
+                      <span className="text-white">${(walletData.usdtCostBasis || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">USDT P&L:</span>
+                      <span className={walletData.usdtPnL && walletData.usdtPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                        ${(walletData.usdtPnL || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Total */}
+                  <div>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-white">Total Wallet P&L:</span>
+                      <span className={walletData.totalWalletPnL && walletData.totalWalletPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                        ${(walletData.totalWalletPnL || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Asset Allocation Donut Chart */}
             <AllocationDonutChart

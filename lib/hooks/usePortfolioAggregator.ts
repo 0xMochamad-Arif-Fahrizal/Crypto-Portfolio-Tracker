@@ -29,6 +29,12 @@ export interface WalletPortfolio {
   usdtValueUSD: number;
   totalWalletValue: number;
   isLoaded: boolean;
+  // Cost basis and P&L
+  ethCostBasis?: number;
+  usdtCostBasis?: number;
+  ethPnL?: number;
+  usdtPnL?: number;
+  totalWalletPnL?: number;
 }
 
 export interface PriceMap {
@@ -104,9 +110,16 @@ export function usePortfolioAggregator(
       dataCompleteness = 'manual-only'; // empty state = prompt user
     }
 
+    // Calculate wallet P&L contribution
+    // If wallet has cost basis data, use the calculated P&L
+    // Otherwise, treat the entire wallet value as unrealized gain
+    const walletPnLContribution = walletPortfolio.isLoaded 
+      ? (walletPortfolio.totalWalletPnL ?? walletTotal)
+      : 0;
+    
     return {
       grandTotalValue: grandTotal,
-      grandTotalPnL: manualPortfolio.totalPnL || 0, // wallet excluded (no cost basis)
+      grandTotalPnL: (manualPortfolio.totalPnL || 0) + walletPnLContribution,
 
       manualAllocation,
       walletAllocation,

@@ -50,8 +50,8 @@ export default function PriceChart({ coin, symbol, color }: PriceChartProps) {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-gray-800 border border-gray-700 rounded px-3 py-2">
-          <p className="text-xs text-gray-400">{data.date}</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 font-mono">
+          <p className="text-xs text-zinc-500">{data.date}</p>
           <p className="text-sm font-semibold text-white">
             ${data.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
@@ -63,16 +63,16 @@ export default function PriceChart({ coin, symbol, color }: PriceChartProps) {
 
   if (loading) {
     return (
-      <div className="w-full h-[250px] bg-gray-800 rounded animate-pulse flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Loading chart...</p>
+      <div className="w-full h-[250px] bg-zinc-900 border border-zinc-800 rounded-xl animate-pulse flex items-center justify-center card-glow">
+        <p className="text-zinc-600 text-sm font-mono">Loading chart...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="w-full h-[250px] bg-gray-800 rounded flex items-center justify-center">
-        <p className="text-red-400 text-sm">{error}</p>
+      <div className="w-full h-[250px] bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center card-glow">
+        <p className="text-red-400 text-sm font-mono">{error}</p>
       </div>
     );
   }
@@ -83,30 +83,30 @@ export default function PriceChart({ coin, symbol, color }: PriceChartProps) {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setSelectedDays(7)}
-          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+          className={`px-3 py-1 rounded text-sm font-medium font-mono transition-colors ${
             selectedDays === 7
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
           }`}
         >
           7D
         </button>
         <button
           onClick={() => setSelectedDays(30)}
-          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+          className={`px-3 py-1 rounded text-sm font-medium font-mono transition-colors ${
             selectedDays === 30
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
           }`}
         >
           30D
         </button>
         <button
           onClick={() => setSelectedDays(90)}
-          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+          className={`px-3 py-1 rounded text-sm font-medium font-mono transition-colors ${
             selectedDays === 90
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
           }`}
         >
           90D
@@ -118,13 +118,13 @@ export default function PriceChart({ coin, symbol, color }: PriceChartProps) {
         <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
           <XAxis
             dataKey="date"
-            tick={{ fill: '#9CA3AF', fontSize: 12 }}
-            stroke="#4B5563"
+            tick={{ fill: '#ffffff', fontSize: 12, fontFamily: 'Courier Prime, monospace' }}
+            stroke="#71717a"
           />
           <YAxis
-            tick={{ fill: '#9CA3AF', fontSize: 12 }}
-            stroke="#4B5563"
-            tickFormatter={(value) => `$${value.toLocaleString()}`}
+            tick={{ fill: '#ffffff', fontSize: 12, fontFamily: 'Courier Prime, monospace' }}
+            stroke="#71717a"
+            tickFormatter={(value) => `${value.toLocaleString()}`}
             domain={['auto', 'auto']}
           />
           <Tooltip content={<CustomTooltip />} />
