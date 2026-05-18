@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import { PortfolioAsset } from '@/lib/firestore/portfolio';
+import CoinMark from '@/components/ui/CoinMark';
 
 interface PortfolioTableProps {
   assets: PortfolioAsset[];
@@ -9,131 +9,100 @@ interface PortfolioTableProps {
   onRemove?: (coinId: string) => void;
 }
 
+function fmtPrice(price: number): string {
+  if (price >= 1) return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (price >= 0.01) return `$${price.toFixed(4)}`;
+  return `$${price.toFixed(6)}`;
+}
+
+const cellL: React.CSSProperties = { padding: '16px 20px', borderBottom: '1px solid var(--border)' };
+const cellR: React.CSSProperties = { ...cellL, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+
 export default function PortfolioTable({ assets, currentPrices, onRemove }: PortfolioTableProps) {
-  if (assets.length === 0) {
-    return (
-      <div className="bg-zinc-900 rounded-xl p-8 border border-zinc-800 text-center card-glow">
-        <p className="text-zinc-500 font-mono">No assets in portfolio yet</p>
-        <p className="text-sm text-zinc-600 mt-2 font-mono">Add your first asset to start tracking</p>
-      </div>
-    );
-  }
-
-  const formatPrice = (price: number): string => {
-    if (price >= 1) return `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (price >= 0.01) return `$${price.toFixed(4)}`;
-    return `$${price.toFixed(6)}`;
-  };
-
-  const formatAmount = (amount: number): string => {
-    if (amount >= 1) return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 });
-    return amount.toFixed(8);
-  };
+  const cols = ['Asset', 'Holdings', 'Avg Buy', 'Price', 'Value', 'P&L', 'ROI', ''];
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden card-glow">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-black">
+    <div className="cf-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
+        <div className="cf-section-title">— Manual Assets · {assets.length}</div>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                Asset
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                Holdings
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                Avg Buy Price
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                Current Price
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                Total Value
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                PnL
-              </th>
-              {onRemove && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase tracking-wider font-mono">
-                  Action
+              {cols.map((h, i) => (
+                <th
+                  key={h + i}
+                  style={{
+                    textAlign: i === 0 || i === cols.length - 1 ? 'left' : 'right',
+                    fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
+                    color: 'var(--ink-3)', fontWeight: 500, padding: '14px 20px',
+                    borderBottom: '1px solid var(--border)', background: 'var(--surface-2)',
+                  }}
+                >
+                  {h}
                 </th>
-              )}
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {assets.map((asset) => {
-              const currentPrice = currentPrices[asset.coinId] || 0;
-              const currentValue = asset.amount * currentPrice;
-              const pnl = currentValue - asset.totalInvested;
-              const pnlPercentage = asset.totalInvested > 0 ? (pnl / asset.totalInvested) * 100 : 0;
-              const isPositive = pnl >= 0;
+          <tbody>
+            {assets.length === 0 ? (
+              <tr>
+                <td colSpan={cols.length} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 12 }}>
+                  No assets in portfolio yet — add one with the button above.
+                </td>
+              </tr>
+            ) : (
+              assets.map((asset, i) => {
+                const price = currentPrices[asset.coinId] || 0;
+                const value = asset.amount * price;
+                const pnl = value - asset.totalInvested;
+                const roi = asset.totalInvested > 0 ? (pnl / asset.totalInvested) * 100 : 0;
+                const isPos = pnl >= 0;
+                const pnlColor = isPos ? 'var(--positive)' : 'var(--negative)';
 
-              return (
-                <tr key={asset.coinId} className="hover:bg-zinc-700/50 transition-colors">
-                  {/* Asset Name */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-zinc-800 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-zinc-300 font-mono">
-                          {asset.symbol.substring(0, 2)}
-                        </span>
+                return (
+                  <tr
+                    key={asset.coinId}
+                    style={{ animation: `cf-fade-up 240ms ${i * 30}ms both` }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={cellL}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <CoinMark symbol={asset.symbol} size={26} />
+                        <div>
+                          <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{asset.symbol}</div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>{asset.name}</div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-white font-mono">{asset.name}</p>
-                        <p className="text-xs text-zinc-500 uppercase font-mono">{asset.symbol}</p>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Holdings */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <p className="text-sm text-white font-mono">{formatAmount(asset.amount)}</p>
-                    <p className="text-xs text-zinc-500 font-mono">{asset.symbol}</p>
-                  </td>
-
-                  {/* Avg Buy Price */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <p className="text-sm text-white font-mono">{formatPrice(asset.averageBuyPrice)}</p>
-                  </td>
-
-                  {/* Current Price */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <p className="text-sm text-white font-mono">{formatPrice(currentPrice)}</p>
-                  </td>
-
-                  {/* Total Value */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <p className="text-sm font-medium text-white font-mono">{formatPrice(currentValue)}</p>
-                    <p className="text-xs text-zinc-500 font-mono">
-                      Invested: {formatPrice(asset.totalInvested)}
-                    </p>
-                  </td>
-
-                  {/* PnL */}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <p className={`text-sm font-medium font-mono ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {isPositive ? '+' : ''}{formatPrice(pnl)}
-                    </p>
-                    <p className={`text-xs font-mono ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {isPositive ? '+' : ''}{pnlPercentage.toFixed(2)}%
-                    </p>
-                  </td>
-
-                  {/* Action */}
-                  {onRemove && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => onRemove(asset.coinId)}
-                        className="text-sm text-red-400 hover:text-red-300 transition-colors font-mono"
-                      >
-                        Remove
-                      </button>
                     </td>
-                  )}
-                </tr>
-              );
-            })}
+                    <td style={{ ...cellR, color: 'var(--ink)' }}>{asset.amount.toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+                    <td style={{ ...cellR, color: 'var(--ink)' }}>{fmtPrice(asset.averageBuyPrice)}</td>
+                    <td style={{ ...cellR, color: 'var(--ink)' }}>{fmtPrice(price)}</td>
+                    <td style={{ ...cellR, fontWeight: 500, color: 'var(--ink)' }}>{fmtPrice(value)}</td>
+                    <td style={{ ...cellR, color: pnlColor, fontWeight: 500 }}>
+                      {isPos ? '+' : '−'}${Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ ...cellR, color: pnlColor }}>
+                      {isPos ? '▲' : '▼'} {Math.abs(roi).toFixed(2)}%
+                    </td>
+                    {onRemove ? (
+                      <td style={cellL}>
+                        <button
+                          onClick={() => onRemove(asset.coinId)}
+                          className="cf-btn cf-btn-ghost"
+                          style={{ height: 28, padding: '0 8px', color: 'var(--ink-3)', fontSize: 11 }}
+                          title="Remove asset"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    ) : <td />}
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

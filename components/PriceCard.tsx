@@ -1,73 +1,58 @@
 'use client';
 
-import Image from 'next/image';
 import { CoinPrice } from '@/lib/api/coingecko';
+import CoinMark from '@/components/ui/CoinMark';
+import DeltaPill from '@/components/ui/DeltaPill';
+import { useCountUp } from '@/components/ui/useCountUp';
 
 interface PriceCardProps {
   coin: CoinPrice;
 }
 
+function fmtBig(n: number | null | undefined): string {
+  if (n == null) return '—';
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+  return `$${n.toLocaleString()}`;
+}
+
+function formatPrice(price: number): string {
+  if (price >= 1) return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (price >= 0.01) return `$${price.toFixed(4)}`;
+  return `$${price.toFixed(6)}`;
+}
+
 export default function PriceCard({ coin }: PriceCardProps) {
-  const isPositive = coin.price_change_percentage_24h >= 0;
-  const priceChangeColor = isPositive ? 'text-emerald-400' : 'text-red-400';
-  const priceChangeBg = isPositive ? 'bg-emerald-400/10' : 'bg-red-400/10';
-
-  // Format large numbers (market cap, volume)
-  const formatLargeNumber = (num: number): string => {
-    if (num >= 1e12) return `$${(num / 1e12).toFixed(2)}T`;
-    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
-    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
-    return `$${num.toLocaleString()}`;
-  };
-
-  // Format price with appropriate decimals
-  const formatPrice = (price: number): string => {
-    if (price >= 1) return `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (price >= 0.01) return `$${price.toFixed(4)}`;
-    return `$${price.toFixed(6)}`;
-  };
+  const animated = useCountUp(coin.current_price, 600);
+  const pct24h = coin.price_change_percentage_24h ?? null;
 
   return (
-    <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 card-glow transition-colors">
-      {/* Header: Logo + Name + Symbol */}
-      <div className="flex items-center gap-3 mb-4">
-        <Image
-          src={coin.image}
-          alt={coin.name}
-          width={40}
-          height={40}
-          className="rounded-full"
-        />
-        <div>
-          <h3 className="text-lg font-semibold text-white font-mono">{coin.name}</h3>
-          <p className="text-sm text-zinc-500 uppercase tracking-wider font-mono">{coin.symbol}</p>
+    <div className="cf-card" style={{ height: '100%' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+        <CoinMark symbol={coin.symbol} size={36} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="cf-h3" style={{ fontSize: 16, fontWeight: 600 }}>{coin.name}</div>
+          <div className="cf-ticker">{coin.symbol.toUpperCase()}</div>
         </div>
+        <DeltaPill pct={pct24h} />
       </div>
 
-      {/* Current Price */}
-      <div className="mb-3">
-        <p className="text-3xl font-bold text-white font-mono">
-          {formatPrice(coin.current_price)}
-        </p>
+      {/* Price */}
+      <div className="cf-num" style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 16, color: 'var(--ink)' }}>
+        {formatPrice(animated)}
       </div>
 
-      {/* 24h Change */}
-      <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${priceChangeBg} mb-4`}>
-        <span className={`text-sm font-medium font-mono ${priceChangeColor}`}>
-          {isPositive ? '▲' : '▼'} {Math.abs(coin.price_change_percentage_24h).toFixed(2)}%
-        </span>
-        <span className="text-xs text-zinc-500 font-mono">24h</span>
-      </div>
-
-      {/* Market Stats */}
-      <div className="space-y-2 pt-4 border-t border-zinc-800">
-        <div className="flex justify-between text-sm">
-          <span className="text-zinc-500 uppercase tracking-wider font-mono">Market Cap</span>
-          <span className="text-white font-medium font-mono">{formatLargeNumber(coin.market_cap)}</span>
+      {/* Stats */}
+      <div style={{ paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="cf-ticker">Market Cap</span>
+          <span className="cf-num" style={{ fontSize: 12, color: 'var(--ink)' }}>{fmtBig(coin.market_cap)}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-zinc-500 uppercase tracking-wider font-mono">Volume (24h)</span>
-          <span className="text-white font-medium font-mono">{formatLargeNumber(coin.total_volume)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="cf-ticker">Volume 24h</span>
+          <span className="cf-num" style={{ fontSize: 12, color: 'var(--ink)' }}>{fmtBig(coin.total_volume)}</span>
         </div>
       </div>
     </div>

@@ -45,45 +45,105 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black">
-      <div className="w-full max-w-md p-8 bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg card-glow">
-        <h1 className="text-3xl font-bold text-center text-white mb-6 font-mono">
-          Login
-        </h1>
+    <div
+      className="cf-dot-grid"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        fontFamily: 'var(--font-sans)',
+        padding: 'var(--s-6)',
+      }}
+    >
+      <div
+        className="cf-enter"
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card)',
+          padding: 'var(--s-8)',
+          boxShadow: 'var(--shadow-2)',
+        }}
+      >
+        {/* Brand */}
+        <Link
+          href="/"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--text-small)',
+            color: 'var(--ink-3)',
+            textDecoration: 'none',
+            marginBottom: 'var(--s-7)',
+          }}
+        >
+          ← CryptoFolio
+        </Link>
 
+        {/* Heading */}
+        <h1
+          className="cf-h2"
+          style={{ marginBottom: 'var(--s-2)' }}
+        >
+          Sign in
+        </h1>
+        <p
+          style={{
+            color: 'var(--ink-2)',
+            fontSize: 'var(--text-small)',
+            marginBottom: 'var(--s-7)',
+          }}
+        >
+          Enter your credentials to continue
+        </p>
+
+        {/* Error */}
         {error && (
-          <div className="mb-4 p-3 bg-red-950 border border-red-800 text-red-400 rounded-lg font-mono text-sm">
+          <div
+            style={{
+              marginBottom: 'var(--s-5)',
+              padding: 'var(--s-3) var(--s-4)',
+              background: 'rgba(255,59,48,0.06)',
+              border: '1px solid rgba(255,59,48,0.25)',
+              borderRadius: 'var(--radius-input)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--text-small)',
+              color: 'var(--negative)',
+            }}
+          >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-5)' }}>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-white mb-1 uppercase tracking-wider font-mono">
-              Email
-            </label>
+            <label htmlFor="email" className="cf-label">Email</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-black border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono transition-colors"
+              className="cf-input"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-white mb-1 uppercase tracking-wider font-mono">
-              Password
-            </label>
+            <label htmlFor="password" className="cf-label">Password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-black border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono transition-colors"
+              className="cf-input"
               placeholder="••••••••"
             />
           </div>
@@ -91,16 +151,29 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+            className="cf-btn cf-btn-primary"
+            style={{ width: '100%', height: '44px', marginTop: 'var(--s-2)' }}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-zinc-500 font-mono">
-          Don't have an account?{' '}
-          <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-            Register here
+        <hr className="cf-hr" style={{ margin: 'var(--s-6) 0' }} />
+
+        <p
+          style={{
+            textAlign: 'center',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--text-small)',
+            color: 'var(--ink-3)',
+          }}
+        >
+          Don&apos;t have an account?{' '}
+          <Link
+            href="/register"
+            style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            Register
           </Link>
         </p>
       </div>

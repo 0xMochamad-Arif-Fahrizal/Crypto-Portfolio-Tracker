@@ -8,10 +8,12 @@ export interface CoinPrice {
   symbol: string;
   name: string;
   current_price: number;
-  price_change_percentage_24h: number;
-  market_cap: number;
-  total_volume: number;
-  image: string;
+  // These fields are null when data comes from a fallback source (Binance / CryptoCompare)
+  // instead of CoinGecko's full /coins/markets endpoint.
+  price_change_percentage_24h: number | null;
+  market_cap: number | null;
+  total_volume: number | null;
+  image?: string | null;
 }
 
 /**
@@ -23,23 +25,48 @@ export interface CoinPrice {
 export async function fetchCoinPrices(
   coinIds: string[] = ['bitcoin', 'ethereum', 'tether', 'binancecoin', 'solana']
 ): Promise<CoinPrice[]> {
-  try {
-    const ids = coinIds.join(',');
-    // Use internal API route instead of direct CoinGecko call
-    const url = `/api/prices?ids=${ids}`;
+  const ids = coinIds.join(',');
+  const url = `/api/prices?ids=${ids}`;
 
-    const response = await fetch(url);
+  // Retry logic: try 3 times with exponential backoff
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
 
-    if (!response.ok) {
-      throw new Error(`Prices API error: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Prices API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error');
+      console.warn(`[fetchCoinPrices] Attempt ${attempt}/3 failed:`, lastError.message);
+      
+      // Wait before retry (exponential backoff: 500ms, 1000ms, 2000ms)
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+      }
     }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching coin prices:', error);
-    throw error;
   }
+
+  // All retries failed - return empty array instead of throwing
+  console.error('[fetchCoinPrices] All retry attempts failed:', lastError?.message);
+  
+  // Return empty array with fallback data structure
+  return coinIds.map(id => ({
+    id,
+    symbol: id.substring(0, 3).toUpperCase(),
+    name: id.charAt(0).toUpperCase() + id.slice(1),
+    current_price: 0,
+    price_change_percentage_24h: null,
+    market_cap: null,
+    total_volume: null,
+  }));
 }
 
 /**

@@ -2,6 +2,37 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+// Suppress Firestore connection warnings in development
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  
+  console.warn = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    // Suppress Firestore backend connection warnings
+    if (
+      message.includes('Could not reach Cloud Firestore backend') ||
+      message.includes('Backend didn\'t respond within') ||
+      message.includes('operate in offline mode')
+    ) {
+      return; // Suppress this warning
+    }
+    originalWarn.apply(console, args);
+  };
+  
+  console.error = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    // Suppress Firestore connection errors in development
+    if (
+      message.includes('Could not reach Cloud Firestore backend') ||
+      message.includes('Backend didn\'t respond within')
+    ) {
+      return; // Suppress this error
+    }
+    originalError.apply(console, args);
+  };
+}
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',

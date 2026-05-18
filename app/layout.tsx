@@ -1,27 +1,20 @@
-import type { Metadata } from "next";
-import { Courier_Prime } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/lib/context/AuthContext";
-
-const courierPrime = Courier_Prime({
-  weight: ['400', '700'],
-  subsets: ["latin"],
-  variable: "--font-courier",
-});
+import './colors_and_type.css';
+import './globals.css';
+import type { Metadata } from 'next';
+import { AuthProvider } from '@/lib/context/AuthContext';
 
 export const metadata: Metadata = {
-  title: "Crypto Portfolio Tracker",
-  description: "Track your cryptocurrency portfolio in real-time",
+  title: 'CryptoFolio',
+  description: 'Track your crypto portfolio — manual assets, ETH & SOL wallets, FIFO cost basis.',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={courierPrime.variable} suppressHydrationWarning>
-      <body className="min-h-screen bg-black text-white antialiased" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ colorScheme: 'light', background: '#ffffff' }}>
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: `html,body{background:#ffffff !important;color-scheme:light}` }} />
+      </head>
+      <body suppressHydrationWarning style={{ background: '#ffffff' }}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

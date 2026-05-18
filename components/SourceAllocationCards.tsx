@@ -15,83 +15,68 @@ export default function SourceAllocationCards({
   walletValue,
   dataCompleteness,
 }: SourceAllocationCardsProps) {
-  // Ensure values are numbers with defaults
   const safeManualValue = manualValue || 0;
   const safeWalletValue = walletValue || 0;
   const safeManualAllocation = manualAllocation || 0;
   const safeWalletAllocation = walletAllocation || 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
       {/* Manual Portfolio Card */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-            Manual Portfolio
-          </h3>
-          <span className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1 rounded-full font-mono">
-            Firebase
-          </span>
+      <div className="cf-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div className="cf-section-title">— Manual Portfolio</div>
+          <span className="cf-tag">Firebase</span>
         </div>
-        
-        <div className="mb-4">
-          <p className="text-3xl font-bold text-white font-mono">
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="cf-num" style={{ fontSize: 28, fontWeight: 600, color: 'var(--ink)' }}>
             ${safeManualValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-        
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-500 font-mono">Allocation</span>
-            <span className="text-white font-bold font-mono">{safeManualAllocation.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-full rounded-full transition-all duration-300"
-              style={{ width: `${safeManualAllocation}%` }}
-            />
           </div>
         </div>
-        
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>Allocation</span>
+            <span className="cf-ticker" style={{ color: 'var(--ink)', fontWeight: 600 }}>{safeManualAllocation.toFixed(1)}%</span>
+          </div>
+          <div style={{ width: '100%', height: 4, background: 'var(--surface-2)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${safeManualAllocation}%`, height: '100%', background: 'var(--ink)', borderRadius: 2, transition: 'width 300ms' }} />
+          </div>
+        </div>
+
         {dataCompleteness === 'manual-only' && (
-          <p className="text-xs text-zinc-600 mt-4 font-mono">
+          <p className="cf-ticker" style={{ color: 'var(--ink-3)', marginTop: 12 }}>
             Add wallet address to see on-chain assets
           </p>
         )}
       </div>
 
       {/* Wallet Portfolio Card */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 card-glow">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-            Wallet Portfolio
-          </h3>
-          <span className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1 rounded-full font-mono">
-            Blockchain
-          </span>
+      <div className="cf-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div className="cf-section-title">— Wallet Portfolio</div>
+          <span className="cf-tag">Blockchain</span>
         </div>
-        
-        <div className="mb-4">
-          <p className="text-3xl font-bold text-white font-mono">
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="cf-num" style={{ fontSize: 28, fontWeight: 600, color: 'var(--ink)' }}>
             ${safeWalletValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-        
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-zinc-500 font-mono">Allocation</span>
-            <span className="text-white font-bold font-mono">{safeWalletAllocation.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div 
-              className="bg-purple-500 h-full rounded-full transition-all duration-300"
-              style={{ width: `${safeWalletAllocation}%` }}
-            />
           </div>
         </div>
-        
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>Allocation</span>
+            <span className="cf-ticker" style={{ color: 'var(--ink)', fontWeight: 600 }}>{safeWalletAllocation.toFixed(1)}%</span>
+          </div>
+          <div style={{ width: '100%', height: 4, background: 'var(--surface-2)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${safeWalletAllocation}%`, height: '100%', background: 'var(--ink)', borderRadius: 2, transition: 'width 300ms' }} />
+          </div>
+        </div>
+
         {dataCompleteness === 'wallet-only' && (
-          <p className="text-xs text-zinc-600 mt-4 font-mono">
+          <p className="cf-ticker" style={{ color: 'var(--ink-3)', marginTop: 12 }}>
             Add manual assets to track cost basis
           </p>
         )}

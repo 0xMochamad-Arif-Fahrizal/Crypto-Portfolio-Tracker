@@ -5,17 +5,12 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/context/AuthContext';
-import { 
-  getUserAssets, 
-  calculatePortfolioSummary, 
-  removeAsset,
-  PortfolioAsset 
-} from '@/lib/firestore/portfolio';
+import { getUserAssets, calculatePortfolioSummary, removeAsset, PortfolioAsset } from '@/lib/firestore/portfolio';
 import { fetchCoinPrices } from '@/lib/api/coingecko';
 import PortfolioSummary from '@/components/PortfolioSummary';
 import PortfolioTable from '@/components/PortfolioTable';
 import AddAssetForm from '@/components/AddAssetForm';
-import Link from 'next/link';
+import AppHeader from '@/components/ui/AppHeader';
 
 export default function PortfolioPage() {
   const { user, loading: authLoading } = useAuth();
@@ -26,237 +21,139 @@ export default function PortfolioPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect if not authenticated
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-    }
+    if (!authLoading && !user) router.push('/login');
   }, [user, authLoading, router]);
 
-  // Load portfolio data
   const loadPortfolio = async () => {
     if (!user) return;
-
     try {
       setError(null);
       setLoading(true);
-
-      // Get user's assets
       const userAssets = await getUserAssets(user.uid);
       setAssets(userAssets);
-
-      // Fetch current prices for all assets
       if (userAssets.length > 0) {
         try {
-          const coinIds = userAssets.map(asset => asset.coinId);
+          const coinIds = userAssets.map((a) => a.coinId);
           const prices = await fetchCoinPrices(coinIds);
-          
           const priceMap: Record<string, number> = {};
-          prices.forEach(coin => {
-            priceMap[coin.id] = coin.current_price;
-          });
+          prices.forEach((c) => { priceMap[c.id] = c.current_price; });
           setCurrentPrices(priceMap);
-        } catch (priceErr) {
-          console.error('Failed to fetch prices:', priceErr);
+        } catch {
           setError('Could not fetch current prices. Showing assets without live prices.');
         }
       }
-    } catch (err) {
-      console.error('Failed to load portfolio:', err);
+    } catch {
       setError('Failed to load portfolio. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      loadPortfolio();
-    }
-  }, [user]);
+  useEffect(() => { if (user) loadPortfolio(); }, [user]);
 
-  // Auto-refresh prices every 60 seconds
   useEffect(() => {
     if (!user || assets.length === 0) return;
-
     const interval = setInterval(async () => {
       try {
-        const coinIds = assets.map(asset => asset.coinId);
-        const prices = await fetchCoinPrices(coinIds);
-        
+        const prices = await fetchCoinPrices(assets.map((a) => a.coinId));
         const priceMap: Record<string, number> = {};
-        prices.forEach(coin => {
-          priceMap[coin.id] = coin.current_price;
-        });
+        prices.forEach((c) => { priceMap[c.id] = c.current_price; });
         setCurrentPrices(priceMap);
-      } catch (err) {
-        console.error('Failed to refresh prices:', err);
-      }
+      } catch {}
     }, 60000);
-
     return () => clearInterval(interval);
   }, [user, assets]);
 
-  const handleAddSuccess = () => {
-    setShowAddForm(false);
-    loadPortfolio();
-  };
-
   const handleRemoveAsset = async (coinId: string) => {
     if (!user) return;
-    
-    if (!confirm('Are you sure you want to remove this asset from your portfolio?')) {
-      return;
-    }
-
+    if (!confirm('Are you sure you want to remove this asset?')) return;
     try {
       await removeAsset(user.uid, coinId);
       loadPortfolio();
-    } catch (err) {
-      console.error('Failed to remove asset:', err);
+    } catch {
       alert('Failed to remove asset. Please try again.');
     }
   };
 
   const handleLogout = async () => {
-    try {
-      if (auth) {
-        await signOut(auth);
-        router.push('/login');
-      }
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+    try { if (auth) { await signOut(auth); router.push('/login'); } } catch {}
   };
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="text-zinc-600 text-sm font-mono">Loading...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 32, height: 32, border: '2px solid var(--border)', borderTopColor: 'var(--ink)', borderRadius: '50%', animation: 'spin 700ms linear infinite', margin: '0 auto 12px' }} />
+          <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>Loading...</span>
         </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const summary = calculatePortfolioSummary(assets, currentPrices);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="bg-zinc-900 border-b border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
-              <h1 className="text-xl sm:text-2xl font-bold text-white font-mono uppercase tracking-wider">
-                CRYPTO PORTFOLIO
-              </h1>
-              <nav className="flex flex-wrap gap-4 text-sm font-mono">
-                <Link 
-                  href="/dashboard" 
-                  className="text-zinc-500 hover:text-white transition-colors"
-                >
-                  Dashboard
-                </Link>
-                <Link 
-                  href="/portfolio" 
-                  className="text-white font-bold"
-                >
-                  Portfolio
-                </Link>
-                <Link 
-                  href="/wallet" 
-                  className="text-zinc-500 hover:text-white transition-colors"
-                >
-                  Wallet
-                </Link>
-                <Link 
-                  href="/history" 
-                  className="text-zinc-500 hover:text-white transition-colors"
-                >
-                  History
-                </Link>
-                <Link 
-                  href="/integrated" 
-                  className="text-zinc-500 hover:text-white transition-colors"
-                >
-                  Integrated
-                </Link>
-              </nav>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm font-mono transition-colors"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      <AppHeader email={user.email} onLogout={handleLogout} />
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px 80px' }}>
+        {/* Page header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
           <div>
-            <h2 className="text-xl font-semibold font-mono uppercase tracking-wider">MY PORTFOLIO</h2>
-            <p className="text-sm text-zinc-500 mt-1 font-mono">{user.email}</p>
+            <div className="cf-section-title" style={{ marginBottom: 10 }}>— My Portfolio</div>
+            <h1 className="cf-h2" style={{ margin: 0 }}>Portfolio</h1>
+            <p className="cf-body cf-muted" style={{ margin: '6px 0 0' }}>{user.email}</p>
           </div>
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-mono font-bold transition-colors"
+            className="cf-btn cf-btn-primary"
+            onClick={() => setShowAddForm((v) => !v)}
           >
-            {showAddForm ? 'CANCEL' : '+ ADD ASSET'}
+            {showAddForm ? (
+              <>✕ Cancel</>
+            ) : (
+              <>+ Add Asset</>
+            )}
           </button>
         </div>
 
-        {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-950 border border-red-800 rounded-lg font-mono">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div style={{ marginBottom: 24, padding: '12px 16px', background: 'var(--negative-bg)', border: '1px solid rgba(255,59,48,0.25)', borderRadius: 8 }}>
+            <p className="cf-body" style={{ margin: 0, color: 'var(--negative)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>{error}</p>
           </div>
         )}
 
-        {/* Add Asset Form */}
         {showAddForm && (
-          <div className="mb-6">
+          <div className="cf-enter" style={{ marginBottom: 24 }}>
             <AddAssetForm
               userId={user.uid}
-              onSuccess={handleAddSuccess}
+              onSuccess={() => { setShowAddForm(false); loadPortfolio(); }}
               onCancel={() => setShowAddForm(false)}
             />
           </div>
         )}
 
-        {/* Loading State */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 font-mono">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-zinc-600 text-sm">Loading portfolio...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '48px 0' }}>
+            <div style={{ width: 32, height: 32, border: '2px solid var(--border)', borderTopColor: 'var(--ink)', borderRadius: '50%', animation: 'spin 700ms linear infinite', marginBottom: 12 }} />
+            <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>Loading portfolio...</span>
           </div>
         ) : (
-          <>
-            {/* Portfolio Summary */}
-            {assets.length > 0 && (
-              <div className="mb-6">
-                <PortfolioSummary summary={summary} />
-              </div>
-            )}
-
-            {/* Portfolio Table */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {assets.length > 0 && <PortfolioSummary summary={summary} />}
             <PortfolioTable
               assets={assets}
               currentPrices={currentPrices}
               onRemove={handleRemoveAsset}
             />
-          </>
+          </div>
         )}
       </main>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

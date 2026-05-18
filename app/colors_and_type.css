@@ -1,0 +1,358 @@
+/* ───────────────────────────────────────────────────────────────────────
+   CryptoFolio Design System — colors_and_type.css
+   Clean white minimalist. Pure mono canvas + green/red P&L only.
+   Inspired by Linear.app, Vercel, Nothing Phone NDot.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* ── Fonts ───────────────────────────────────────────────────────────────
+   Geist Sans + Geist Mono are SIL-OFL open-source variable webfonts.
+   We pull them from the official Google Fonts mirror.
+   LED Dot-Matrix is the brand-supplied dot-matrix face for hero numerals
+   — the "Nothing Phone NDot" look the brief asked for. Loaded from
+   ../fonts/LED_Dot-Matrix_400.ttf via @font-face below.
+   ──────────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
+
+@font-face {
+  font-family: 'LED Dot-Matrix';
+  src: url('./fonts/LED_Dot-Matrix_400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Color tokens ───────────────────────────────────────────────────── */
+  /* Neutral canvas — mono only */
+  --bg:              #FFFFFF;
+  --surface:         #FAFAFA;
+  --surface-2:       #F4F4F4;
+  --surface-inset:   #F8F8F8;
+
+  --ink:             #0A0A0A;
+  --ink-2:           #525252;
+  --ink-3:           #A3A3A3;
+  --ink-4:           #D4D4D4;
+
+  --border:          #E5E5E5;
+  --border-strong:   #0A0A0A;
+
+  /* The only chromatic colors in the whole product */
+  --positive:        #00C853;
+  --positive-bg:     rgba(0, 200, 83, 0.08);
+  --negative:        #FF3B30;
+  --negative-bg:     rgba(255, 59, 48, 0.08);
+
+  /* Semantic aliases */
+  --fg:              var(--ink);
+  --fg-muted:        var(--ink-2);
+  --fg-faint:        var(--ink-3);
+
+  /* ── Type families ──────────────────────────────────────────────────── */
+  --font-sans:    'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:    'Geist Mono', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --font-display: 'LED Dot-Matrix', 'Geist Mono', 'JetBrains Mono', monospace; /* hero numerals — Nothing/NDot vibe */
+
+  /* ── Type scale ─────────────────────────────────────────────────────── */
+  --text-display: 64px;
+  --text-h1:      40px;
+  --text-h2:      28px;
+  --text-h3:      18px;
+  --text-body:    14px;
+  --text-small:   13px;
+  --text-xs:      11px;
+  --text-2xs:     10px;
+
+  --leading-tight: 1.1;
+  --leading-snug:  1.25;
+  --leading-base:  1.5;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-wider:  0.08em;
+  --tracking-widest: 0.12em;
+
+  /* ── Spacing scale (4px base) ───────────────────────────────────────── */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  20px;
+  --s-6:  24px;
+  --s-7:  32px;
+  --s-8:  48px;
+  --s-9:  64px;
+  --s-10: 96px;
+
+  /* ── Radii ──────────────────────────────────────────────────────────── */
+  --radius-input:  8px;
+  --radius-card:  12px;
+  --radius-tag:    6px;
+  --radius-pill: 999px;
+
+  /* ── Shadows ────────────────────────────────────────────────────────── */
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px rgba(10, 10, 10, 0.04);
+  --shadow-2: 0 8px 24px rgba(10, 10, 10, 0.06), 0 1px 2px rgba(10, 10, 10, 0.04);
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:   120ms;
+  --dur-base:   160ms;
+  --dur-enter:  240ms;
+  --dur-count:  600ms;
+}
+
+/* ── Base reset (scoped — won't fight Tailwind in real app) ─────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Semantic typography classes ──────────────────────────────────────────
+   Use these instead of repeating font sizes everywhere.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.cf-display {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  letter-spacing: 0.02em; /* dot-matrix wants a little breathing room */
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.cf-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h1);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cf-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h2);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cf-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-h3);
+  line-height: var(--leading-snug);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* Section openers — UPPERCASE, mono, wide tracking */
+.cf-section-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Body and helpers */
+.cf-body  { font-size: var(--text-body);  color: var(--ink); }
+.cf-muted { color: var(--ink-2); }
+.cf-faint { color: var(--ink-3); }
+
+/* Mono numerals */
+.cf-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.cf-num-lg { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-h2); font-weight: 600; }
+.cf-num-md { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-body); font-weight: 500; }
+.cf-num-sm { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-small); font-weight: 400; }
+
+/* Tickers — small, mono, caps */
+.cf-ticker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+/* Use when a section title is genuinely long-form and must wrap */
+.cf-section-title.cf-wrap,
+.cf-ticker.cf-wrap { white-space: normal; }
+
+/* Micro-tag (manual / wallet / mixed / EVM / SOL) */
+.cf-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: 3px 6px;
+  border-radius: var(--radius-tag);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+  line-height: 1;
+}
+
+/* P&L color helpers */
+.cf-positive { color: var(--positive); }
+.cf-negative { color: var(--negative); }
+
+/* Pill (for ▲ 2.34% style 24h deltas) */
+.cf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+  white-space: nowrap;
+}
+.cf-pill-positive { background: var(--positive-bg); color: var(--positive); }
+.cf-pill-negative { background: var(--negative-bg); color: var(--negative); }
+.cf-pill-neutral  { background: var(--surface-2);   color: var(--ink-2); }
+
+/* ── Card — the canonical pattern ─────────────────────────────────────── */
+.cf-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--s-6);
+  transition: box-shadow var(--dur-base) var(--ease-standard);
+}
+.cf-card:hover { box-shadow: var(--shadow-1); }
+.cf-card-flat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--s-6); }
+
+/* ── Button ───────────────────────────────────────────────────────────── */
+.cf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  height: 36px;
+  padding: 0 var(--s-4);
+  border-radius: var(--radius-input);
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease-standard),
+              color      var(--dur-base) var(--ease-standard),
+              transform  var(--dur-fast) var(--ease-standard),
+              opacity    var(--dur-base) var(--ease-standard);
+  white-space: nowrap;
+  user-select: none;
+}
+.cf-btn:active { transform: scale(0.98); }
+.cf-btn:focus-visible { outline: 1.5px solid var(--ink); outline-offset: 2px; }
+.cf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cf-btn-primary   { background: var(--ink); color: #fff; }
+.cf-btn-primary:hover:not(:disabled) { opacity: 0.88; }
+
+.cf-btn-secondary { background: var(--bg); color: var(--ink); border-color: var(--border); }
+.cf-btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+
+.cf-btn-ghost     { background: transparent; color: var(--ink-2); }
+.cf-btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
+.cf-btn-danger    { background: var(--bg); color: var(--negative); border-color: var(--border); }
+.cf-btn-danger:hover:not(:disabled) { background: var(--negative-bg); border-color: var(--negative); }
+
+/* ── Input ────────────────────────────────────────────────────────────── */
+.cf-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--s-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  transition: border-color var(--dur-base) var(--ease-standard);
+}
+.cf-input::placeholder { color: var(--ink-3); }
+.cf-input:focus { outline: none; border-color: var(--ink); border-width: 1.5px; padding-left: calc(var(--s-3) - 0.5px); }
+.cf-input:disabled { background: var(--surface); color: var(--ink-3); cursor: not-allowed; }
+
+/* Input label (above field) */
+.cf-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  color: var(--ink-2);
+  margin-bottom: var(--s-2);
+}
+
+/* ── Dot grid (single decorative motif — for landing hero) ────────────── */
+.cf-dot-grid {
+  background-image: radial-gradient(circle, var(--ink-4) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* ── Hairline divider ─────────────────────────────────────────────────── */
+.cf-hr { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+/* ── Motion utilities ─────────────────────────────────────────────────── */
+@keyframes cf-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cf-enter { animation: cf-fade-up var(--dur-enter) var(--ease-standard) both; }
+/* Stagger: apply inline style="animation-delay: ${i*40}ms" */
+
+@keyframes cf-flip-up {
+  0%   { transform: translateY(0);     color: var(--ink); }
+  20%  { transform: translateY(-1px);  color: var(--positive); }
+  100% { transform: translateY(0);     color: var(--ink); }
+}
+@keyframes cf-flip-down {
+  0%   { transform: translateY(0);     color: var(--ink); }
+  20%  { transform: translateY(1px);   color: var(--negative); }
+  100% { transform: translateY(0);     color: var(--ink); }
+}
+.cf-flip-up   { animation: cf-flip-up   800ms var(--ease-standard); display: inline-block; }
+.cf-flip-down { animation: cf-flip-down 800ms var(--ease-standard); display: inline-block; }
+
+/* ── Dot-matrix hero numerals ───────────────────────────────────────────
+   Uses the LED Dot-Matrix font directly — no text-shadow trickery needed
+   now that we have the real face.
+   ──────────────────────────────────────────────────────────────────────── */
+.cf-display-pixel {
+  font-family: var(--font-display);
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: 0.02em;
+}

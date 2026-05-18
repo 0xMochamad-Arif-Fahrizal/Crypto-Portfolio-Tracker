@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User-specific data - only accessible by the owner
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    // Portfolio data - only accessible by the owner
+    match /portfolios/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    // Wallet cost basis - only accessible by the owner
+    match /walletCostBasis/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Saved wallets (Ethereum + Solana) - only accessible by the owner
+    match /savedWallets/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Transactions - only accessible by the owner
+    match /transactions/{transactionId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Price cache - readable by authenticated users, writable only by server
+    match /prices/{priceId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only server (Admin SDK) can write
+    }
+    
+    // Default deny - Firestore denies by default if no rule matches
+  }
+}

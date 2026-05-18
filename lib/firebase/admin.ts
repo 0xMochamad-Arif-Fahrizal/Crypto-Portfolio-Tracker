@@ -1,26 +1,31 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-let adminApp: App;
+// adminDb is null when no service-account credentials are configured.
+// Every caller already guards with `if (adminDb)` before use.
+export let adminDb: Firestore | null = null;
 
-// Initialize Firebase Admin SDK
-if (getApps().length === 0) {
-  // TODO: Add FIREBASE_ADMIN_SDK environment variable
-  // This should contain the service account JSON credentials
-  // For now, this is scaffolded and will be configured later
-  
-  // Uncomment and configure when FIREBASE_ADMIN_SDK env variable is ready:
-  // const serviceAccount = JSON.parse(
-  //   process.env.FIREBASE_ADMIN_SDK || '{}'
-  // );
-  // adminApp = initializeApp({
-  //   credential: cert(serviceAccount),
-  // });
-  
-  adminApp = initializeApp();
-} else {
-  adminApp = getApps()[0];
+try {
+  let adminApp: App;
+
+  if (getApps().length === 0) {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const privateKey  = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const projectId   = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+    if (clientEmail && privateKey) {
+      adminApp = initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    } else {
+      // No service-account env vars — skip Admin SDK entirely.
+      // Callers' `if (adminDb)` guard will bypass Firestore reads.
+      throw new Error('FIREBASE_ADMIN_CLIENT_EMAIL / FIREBASE_ADMIN_PRIVATE_KEY not set');
+    }
+  } else {
+    adminApp = getApps()[0];
+  }
+
+  adminDb = getFirestore(adminApp);
+} catch (e) {
+  // Non-fatal — Firestore server-side reads are optional (price cache, etc.)
+  console.warn('[Firebase Admin] Disabled:', e instanceof Error ? e.message : e);
 }
-
-// Export Firestore instance for server-side use
-export const adminDb = getFirestore(adminApp);
