@@ -43,14 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="max-w-md p-8 bg-red-900/20 border border-red-500 rounded-lg">
-          <h2 className="text-xl font-bold text-red-500 mb-4">Authentication Error</h2>
-          <p className="text-red-300 mb-4">{error}</p>
-          <div className="text-sm text-gray-400">
-            <p className="mb-2">Please ensure:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>You have created a <code className="bg-gray-800 px-1 rounded">.env.local</code> file</li>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#ffffff' }}>
+        <div style={{ maxWidth: 440, padding: '32px', background: '#ffffff', border: '1px solid #e5e5e5', borderRadius: 12 }}>
+          <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 18, fontWeight: 600, color: '#FF3B30', marginBottom: 12 }}>Authentication Error</h2>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#FF3B30', marginBottom: 16 }}>{error}</p>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#A3A3A3' }}>
+            <p style={{ marginBottom: 8 }}>Please ensure:</p>
+            <ul style={{ paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <li>You have created a <code style={{ background: '#F4F4F4', padding: '1px 4px', borderRadius: 4 }}>.env.local</code> file</li>
               <li>All Firebase environment variables are set correctly</li>
               <li>Your Firebase project is properly configured</li>
             </ul>
@@ -62,8 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#ffffff' }}>
+        <div style={{ width: 32, height: 32, border: '2px solid #e5e5e5', borderTopColor: '#0a0a0a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
