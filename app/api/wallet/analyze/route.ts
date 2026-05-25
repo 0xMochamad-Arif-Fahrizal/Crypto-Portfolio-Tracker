@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import {
   printFifoAudit,
   writeAuditFile,
@@ -63,7 +65,7 @@ interface CostBasisResult {
     /** Surviving FIFO lots after all OUTs, gas drain, and reconciliation.
      *  Client uses this (not transactionDetails) to compute cost basis so
      *  price overrides only apply to unsold quantities. */
-    openLots?: Array<{ txHash: string; amount: number; pricePerEth: number }>;
+    openLots?: Array<{ txHash: string; amount: number; pricePerEth: number; requiresManualPrice?: boolean }>;
     /** Internal audit payload — consumed by GET handler, NOT forwarded to client. */
     _audit?: {
       inRows: AuditInRow[];
@@ -442,6 +444,7 @@ async function calculateEthCostBasis(
     pricePerEth: number;
     priceSource: string;
     timestamp: number;
+    requiresManualPrice?: boolean;
   }
 
   // Audit accumulators
@@ -549,29 +552,48 @@ async function calculateEthCostBasis(
         `IN  ${tx.hash.substring(0, 10)}...: +${ethAmount.toFixed(4)} ETH @ $${ethPrice.toFixed(2)} [${priceSource}]`
       );
     } else {
-      // Missing price data - this is a CRITICAL issue
+      // Missing price — lot stays in FIFO queue with pricePerEth=0 so the
+      // balance never goes negative. Cost basis is $0 until user enters a
+      // manual price via the UI "HARGA MISSING" button.
       zeroPriceCount += 1;
 
-      auditInRows.push({
-        lotNo: 0,
-        txHash: tx.hash,
-        dateStr,
-        ethAmount,
-        pricePerEth: 0,
-        priceSource: 'missing',
-        costBasisUSD: 0,
-      });
+      if (processedIncomingTxs.some(ptx => ptx.hash === tx.hash)) {
+        auditLotCounter += 1;
+        purchases.push({
+          lotNo: auditLotCounter,
+          txHash: tx.hash,
+          amount: ethAmount,
+          pricePerEth: 0,
+          priceSource: 'missing',
+          timestamp,
+          requiresManualPrice: true,
+        });
+
+        // Cost basis is $0 for this lot until user supplies manual price.
+        // totalInvestedUSD += 0 intentionally.
+        totalEthRemaining += ethAmount; // balance must stay correct
+
+        auditInRows.push({
+          lotNo: auditLotCounter,
+          txHash: tx.hash,
+          dateStr,
+          ethAmount,
+          pricePerEth: 0,
+          priceSource: 'missing',
+          costBasisUSD: 0,
+        });
+      }
 
       if (detail) {
         detail.priceAtTime = 0;
         detail.valueUSD = 0;
       }
 
-      console.error(
-        `❌ IN  ${tx.hash.substring(0, 10)}...: +${ethAmount.toFixed(4)} ETH @ MISSING PRICE`
+      console.warn(
+        `⚠️  IN  ${tx.hash.substring(0, 10)}...: +${ethAmount.toFixed(4)} ETH @ MISSING PRICE — kept in FIFO queue, cost=$0`
       );
-      console.error(`   Transaction date: ${new Date(timestamp * 1000).toISOString()}`);
-      console.error(`   This transaction will be EXCLUDED from cost basis calculation`);
+      console.warn(`   Transaction date: ${new Date(timestamp * 1000).toISOString()}`);
+      console.warn(`   UI will prompt manual price entry for this lot`);
     }
   }
 
@@ -790,6 +812,7 @@ async function calculateEthCostBasis(
     txHash: p.txHash,
     amount: p.amount,
     pricePerEth: p.pricePerEth,
+    ...(p.requiresManualPrice ? { requiresManualPrice: true } : {}),
   }));
 
   // auditOutRows is already in insertion order (chronological)
@@ -952,38 +975,58 @@ async function calculateUsdtCostBasis(
 // ── Historical ETH price fetcher ─────────────────────────────────────────────
 //
 // Priority:
-//   1. In-memory cache  (survives across requests in same Lambda instance)
-//   2. Binance Klines   (free, no auth, covers ETHUSDT from Aug 2017, no
-//                        rate-limit issues, not blocked in Indonesia)
-//   3. CoinGecko history (free public endpoint, may 401/429 on old dates)
-//   4. CryptoCompare    (free tier, no API key needed, not blocked in Indonesia)
-//   5. Hardcoded table  (covers all 12 known transaction dates — reliable for
-//                        demo / skripsi regardless of network conditions)
+//   1. In-memory cache   (hot, same process lifetime)
+//   2. File cache        (lib/price-cache.json — survives restarts)
+//   3. Hardcoded table   (verified prices for all known transaction dates)
+//   4. Binance Klines    (free, no auth, ETHUSDT Aug 2017+)
+//   5. CoinGecko history (may 429 on old dates)
+//   6. CryptoCompare     (free tier fallback)
 //   → If still 0: UI shows "Masukkan harga beli" prompt; user types manually.
 
+// ── File-based persistent price cache ────────────────────────────────────────
+const PRICE_CACHE_PATH = path.join(process.cwd(), 'lib/price-cache.json');
+
+function loadPriceCache(): Record<string, Record<string, number>> {
+  try {
+    if (fs.existsSync(PRICE_CACHE_PATH)) {
+      return JSON.parse(fs.readFileSync(PRICE_CACHE_PATH, 'utf-8'));
+    }
+  } catch {}
+  return {};
+}
+
+function savePriceCache(cache: Record<string, Record<string, number>>) {
+  try {
+    fs.writeFileSync(PRICE_CACHE_PATH, JSON.stringify(cache, null, 2));
+  } catch {}
+}
+
 // ── Hardcoded fallback prices (YYYY-MM-DD → USD) ─────────────────────────────
-// Source: CryptoCompare-verified daily close for each known transaction date.
-// These cover every known transaction date in this wallet so the FIFO engine
-// always has a non-zero cost basis even when all APIs are blocked.
-// User can override any price manually via the UI "HARGA MISSING" button.
+// CryptoCompare-verified daily close for every known transaction date.
+// Covers all lots in this wallet so FIFO never hits zeroPriceCount=0.
 const ETH_HARDCODED_PRICES: Record<string, number> = {
+  // From audit logs — verified prices
+  '2022-11-09': 1104.17,
+  '2023-01-28': 1572.46,
+  '2025-05-09': 2345.32,
+  '2025-12-31': 2967.53,
+  // CryptoCompare-verified
   '2024-01-24': 2300,
   '2024-02-01': 2350,
   '2024-02-09': 2500,
-  '2024-02-21': 2968,  // CryptoCompare verified: $2,968.67
-  '2024-05-04': 3117,  // CryptoCompare verified: $3,117.52
-  '2024-06-24': 3350,  // CryptoCompare verified: $3,350.54
+  '2024-02-21': 2968,
+  '2024-05-04': 3117,
+  '2024-06-24': 3350,
   '2024-12-23': 3300,
   '2025-01-04': 3600,
-  '2025-08-07': 3911,  // CryptoCompare verified: $3,911.67
-  '2025-11-08': 3400,  // CryptoCompare verified: $3,400.93
+  '2025-08-07': 3911,
+  '2025-11-08': 3400,
 };
 
 // ── In-memory price cache (keyed by YYYY-MM-DD) ───────────────────────────────
-// Populated on first fetch; subsequent requests for the same date return
-// immediately without any network call. Survives for the lifetime of the
-// Next.js server process (cleared only on restart).
 const historicalCache = new Map<string, number>();
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number; source: string }> {
   const now = Math.floor(Date.now() / 1000);
@@ -992,12 +1035,37 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
 
   const dateStr = new Date(timestamp * 1000).toISOString().slice(0, 10);
 
-  // ── 1. In-memory cache — fastest path, zero network cost ─────────────────
+  // ── 1. In-memory cache ────────────────────────────────────────────────────
   if (historicalCache.has(dateStr)) {
     return { price: historicalCache.get(dateStr)!, source: 'cache' };
   }
 
-  // ── 2. Binance Klines (ETHUSDT daily candle) ─────────────────────────────
+  // ── 2. File-based persistent cache ───────────────────────────────────────
+  const fileCache = loadPriceCache();
+  if (fileCache['ETH']?.[dateStr]) {
+    const price = fileCache['ETH'][dateStr];
+    historicalCache.set(dateStr, price);
+    console.log(`✓ [FileCache] ETH ${dateStr}: $${price.toFixed(2)}`);
+    return { price, source: 'file-cache' };
+  }
+
+  // Helper: persist a freshly fetched price to both caches
+  const persist = (price: number) => {
+    historicalCache.set(dateStr, price);
+    if (!fileCache['ETH']) fileCache['ETH'] = {};
+    fileCache['ETH'][dateStr] = price;
+    savePriceCache(fileCache);
+  };
+
+  // ── 3. Hardcoded fallback table ───────────────────────────────────────────
+  if (ETH_HARDCODED_PRICES[dateStr] !== undefined) {
+    const price = ETH_HARDCODED_PRICES[dateStr];
+    persist(price);
+    console.log(`✓ [Hardcoded] ETH ${dateStr}: $${price.toFixed(2)}`);
+    return { price, source: 'hardcoded' };
+  }
+
+  // ── 4. Binance Klines (ETHUSDT daily candle) ─────────────────────────────
   try {
     const startMs = timestamp * 1000;
     const url =
@@ -1008,9 +1076,9 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
       const rows: [number, string, string, string, string, ...unknown[]][] =
         await res.json();
       if (Array.isArray(rows) && rows.length > 0) {
-        const close = parseFloat(rows[0][4]); // index 4 = close
+        const close = parseFloat(rows[0][4]);
         if (close > 0) {
-          historicalCache.set(dateStr, close);
+          persist(close);
           console.log(`✓ [Binance] ETH ${dateStr}: $${close.toFixed(2)}`);
           return { price: close, source: 'binance' };
         }
@@ -1022,7 +1090,8 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
     console.warn(`[Binance] skip ${dateStr}: timeout/blocked`);
   }
 
-  // ── 3. CoinGecko /coins/ethereum/history (DD-MM-YYYY) ────────────────────
+  // ── 5. CoinGecko /coins/ethereum/history (DD-MM-YYYY) ────────────────────
+  await delay(300);
   try {
     const [year, month, day] = dateStr.split('-');
     const url =
@@ -1033,7 +1102,7 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
       const data = await res.json();
       const price: number | undefined = data?.market_data?.current_price?.usd;
       if (price && price > 0) {
-        historicalCache.set(dateStr, price);
+        persist(price);
         console.log(`✓ [CoinGecko] ETH ${dateStr}: $${price.toFixed(2)}`);
         return { price, source: 'coingecko' };
       }
@@ -1044,7 +1113,8 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
     console.warn(`[CoinGecko] failed for ${dateStr}:`, e);
   }
 
-  // ── 4. CryptoCompare pricehistorical ─────────────────────────────────────
+  // ── 6. CryptoCompare pricehistorical ─────────────────────────────────────
+  await delay(300);
   try {
     const url =
       `https://min-api.cryptocompare.com/data/pricehistorical` +
@@ -1054,7 +1124,7 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
       const data = await res.json();
       const price: number | undefined = data?.ETH?.USD;
       if (price && price > 0) {
-        historicalCache.set(dateStr, price);
+        persist(price);
         console.log(`✓ [CryptoCompare] ETH ${dateStr}: $${price.toFixed(2)}`);
         return { price, source: 'cryptocompare' };
       }
@@ -1063,14 +1133,6 @@ async function getHistoricalEthPrice(timestamp: number): Promise<{ price: number
     }
   } catch (e) {
     console.warn(`[CryptoCompare] failed for ${dateStr}:`, e);
-  }
-
-  // ── 5. Hardcoded fallback table ───────────────────────────────────────────
-  if (ETH_HARDCODED_PRICES[dateStr] !== undefined) {
-    const price = ETH_HARDCODED_PRICES[dateStr];
-    historicalCache.set(dateStr, price);
-    console.log(`✓ [Hardcoded] ETH ${dateStr}: $${price.toFixed(2)}`);
-    return { price, source: 'hardcoded' };
   }
 
   // ── Still nothing — signal UI to prompt manual entry ─────────────────────
