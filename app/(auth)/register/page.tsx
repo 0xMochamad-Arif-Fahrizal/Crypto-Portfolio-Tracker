@@ -1,203 +1,199 @@
 'use client';
 
 import { useState } from 'react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/client';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+const USERNAME_RE = /^[A-Za-z0-9_]{3,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label className="cf-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span>{label}</span>
+        {hint && <span style={{ color: 'var(--ink-3)', textTransform: 'none', letterSpacing: 0, fontFamily: 'var(--font-sans)' }}>{hint}</span>}
+      </label>
+      {children}
+      {error && (
+        <div className="cf-ticker" style={{ color: 'var(--negative)', marginTop: 6, textTransform: 'none', letterSpacing: 0 }}>{error}</div>
+      )}
+    </div>
+  );
+}
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError('');
+  const fieldErrors = {
+    email: email && !EMAIL_RE.test(email) ? 'Email tidak valid.' : '',
+    username: username && !USERNAME_RE.test(username) ? 'Min 3 karakter — huruf, angka, atau underscore saja.' : '',
+    password: password && password.length < 6 ? 'Password minimal 6 karakter.' : '',
+  };
+  const filled = email && username && password;
+  const valid = !!(filled && !fieldErrors.email && !fieldErrors.username && !fieldErrors.password);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+  const handleSubmit = async () => {
+    setTouched({ email: true, username: true, password: true });
+    if (!valid) return;
 
     if (!auth) {
       setError('Firebase Auth is not initialized. Please check your environment variables.');
       return;
     }
 
+    setError('');
     setLoading(true);
-
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: username.trim() });
+      if (db) {
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          username: username.trim(),
+          email: email.trim().toLowerCase(),
+          createdAt: serverTimestamp(),
+        });
+      }
       router.push('/dashboard');
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
-        setError('An account with this email already exists');
+        setError('Akun dengan email ini sudah ada.');
       } else if (err.code === 'auth/invalid-email') {
-        setError('Invalid email address');
+        setError('Alamat email tidak valid.');
       } else if (err.code === 'auth/weak-password') {
-        setError('Password is too weak');
+        setError('Password terlalu lemah.');
       } else {
-        setError('Failed to create account. Please try again');
+        setError('Gagal membuat akun. Silakan coba lagi.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const usernameValid = username && USERNAME_RE.test(username);
+
   return (
-    <div
-      className="cf-dot-grid"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'var(--bg)',
-        fontFamily: 'var(--font-sans)',
-        padding: 'var(--s-6)',
-      }}
-    >
-      <div
-        className="cf-enter"
-        style={{
-          width: '100%',
-          maxWidth: '400px',
-          background: 'var(--bg)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-card)',
-          padding: 'var(--s-8)',
-          boxShadow: 'var(--shadow-2)',
-        }}
-      >
-        {/* Brand */}
-        <Link
-          href="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 'var(--s-2)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--text-small)',
-            color: 'var(--ink-3)',
-            textDecoration: 'none',
-            marginBottom: 'var(--s-7)',
-          }}
-        >
-          ← CryptoFolio
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* dot-grid backdrop */}
+      <div className="cf-dot-grid" style={{ position: 'absolute', inset: 0, opacity: 0.5 }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 40%, transparent 0%, transparent 40%, var(--bg) 80%)' }} />
+
+      {/* Brand header */}
+      <header style={{ position: 'relative', padding: '24px 32px' }}>
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <img src="/assets/logo/cryptofolio-mark.svg" width={22} height={22} alt="" />
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 15, color: 'var(--ink)', letterSpacing: '-0.01em' }}>CryptoFolio</span>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--ink)' }} />
         </Link>
+      </header>
 
-        {/* Heading */}
-        <h1
-          className="cf-h2"
-          style={{ marginBottom: 'var(--s-2)' }}
-        >
-          Create account
-        </h1>
-        <p
+      {/* Card */}
+      <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px 64px' }}>
+        <div
+          className="cf-enter"
           style={{
-            color: 'var(--ink-2)',
-            fontSize: 'var(--text-small)',
-            marginBottom: 'var(--s-7)',
+            width: 'min(420px, 92vw)',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 32,
+            boxShadow: 'var(--shadow-2)',
           }}
         >
-          Start tracking your crypto portfolio
-        </p>
-
-        {/* Error */}
-        {error && (
-          <div
-            style={{
-              marginBottom: 'var(--s-5)',
-              padding: 'var(--s-3) var(--s-4)',
-              background: 'rgba(255,59,48,0.06)',
-              border: '1px solid rgba(255,59,48,0.25)',
-              borderRadius: 'var(--radius-input)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 'var(--text-small)',
-              color: 'var(--negative)',
-            }}
-          >
-            {error}
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 2, padding: 3, background: 'var(--surface-2)', borderRadius: 10, marginBottom: 24 }}>
+            <span
+              className="cf-btn"
+              style={{ flex: 1, height: 34, borderRadius: 8, background: 'var(--bg)', color: 'var(--ink)', boxShadow: 'var(--shadow-1)' }}
+            >
+              Register
+            </span>
+            <Link
+              href="/login"
+              className="cf-btn"
+              style={{ flex: 1, height: 34, borderRadius: 8, background: 'transparent', color: 'var(--ink-2)', boxShadow: 'none', textDecoration: 'none' }}
+            >
+              Log in
+            </Link>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-5)' }}>
-          <div>
-            <label htmlFor="email" className="cf-label">Email</label>
+          <h1 className="cf-h2" style={{ fontWeight: 600, marginBottom: 4 }}>Create your account</h1>
+          <p className="cf-body cf-muted" style={{ marginBottom: 24 }}>Track manual assets and on-chain wallets in one place.</p>
+
+          {error && (
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--negative-bg)', border: '1px solid rgba(255,59,48,0.25)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--negative)' }}>
+              {error}
+            </div>
+          )}
+
+          <Field label="Email" error={touched.email ? fieldErrors.email : ''}>
             <input
-              id="email"
+              className="cf-input"
               type="email"
+              placeholder="you@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="cf-input"
-              placeholder="you@example.com"
+              onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor="password" className="cf-label">Password</label>
+          <Field label="Username" hint="huruf, angka, _" error={touched.username ? fieldErrors.username : ''}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 13, pointerEvents: 'none' }}>@</span>
+              <input
+                className="cf-input"
+                placeholder="your_username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, username: true }))}
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                style={{ paddingLeft: 26 }}
+              />
+              {usernameValid && (
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--positive)' }}>✓</span>
+              )}
+            </div>
+          </Field>
+
+          <Field label="Password" error={touched.password ? fieldErrors.password : ''}>
             <input
-              id="password"
+              className="cf-input"
               type="password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              className="cf-input"
-              placeholder="••••••••"
+              onBlur={() => setTouched((t) => ({ ...t, password: true }))}
             />
-          </div>
-
-          <div>
-            <label htmlFor="confirmPassword" className="cf-label">Confirm Password</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="cf-input"
-              placeholder="••••••••"
-            />
-          </div>
+          </Field>
 
           <button
-            type="submit"
-            disabled={loading}
             className="cf-btn cf-btn-primary"
-            style={{ width: '100%', height: '44px', marginTop: 'var(--s-2)' }}
+            style={{ width: '100%', height: 44, marginTop: 8 }}
+            onClick={handleSubmit}
+            disabled={loading}
           >
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? 'Creating account…' : 'Create account'}
           </button>
-        </form>
 
-        <hr className="cf-hr" style={{ margin: 'var(--s-6) 0' }} />
-
-        <p
-          style={{
-            textAlign: 'center',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--text-small)',
-            color: 'var(--ink-3)',
-          }}
-        >
-          Already have an account?{' '}
-          <Link
-            href="/login"
-            style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'none' }}
-          >
-            Sign in
-          </Link>
-        </p>
+          <div className="cf-ticker cf-muted cf-wrap" style={{ textAlign: 'center', marginTop: 16 }}>
+            Already have an account?{' '}
+            <Link href="/login" style={{ color: 'var(--ink)' }}>Log in</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

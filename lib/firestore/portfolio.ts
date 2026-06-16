@@ -1,11 +1,11 @@
 // Firestore data structure and operations for portfolio management
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
   deleteDoc,
   query,
   where,
@@ -14,6 +14,16 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 
+// ── Lot: a single purchase record for an asset ───────────────────────
+export interface Lot {
+  id: string;
+  createdAt: string; // ISO 8601 string with full timestamp, e.g. "2026-06-14T11:23:45.123Z"
+  amount: number;
+  buyPrice: number;
+  totalCost: number;
+  note: string;
+}
+
 // TypeScript interfaces for portfolio data
 export interface PortfolioAsset {
   id?: string; // Firestore document ID
@@ -21,11 +31,20 @@ export interface PortfolioAsset {
   coinId: string; // CoinGecko coin ID (e.g., 'bitcoin')
   symbol: string; // e.g., 'BTC'
   name: string; // e.g., 'Bitcoin'
-  amount: number; // Total amount of coins owned
-  averageBuyPrice: number; // Average purchase price in USD
-  totalInvested: number; // Total USD invested
+  amount: number; // Total amount of coins owned (aggregated from lots)
+  averageBuyPrice: number; // Average purchase price in USD (aggregated from lots)
+  totalInvested: number; // Total USD invested (aggregated from lots)
   createdAt: Date;
   updatedAt: Date;
+  lots?: Lot[]; // Populated from subcollection when using getUserAssetsWithLots()
+}
+
+// Recompute aggregate fields from a set of lots
+function recalcFromLots(lots: Lot[]): { amount: number; averageBuyPrice: number; totalInvested: number } {
+  const totalAmount = lots.reduce((s, l) => s + l.amount, 0);
+  const totalInvested = lots.reduce((s, l) => s + l.totalCost, 0);
+  const averageBuyPrice = totalAmount > 0 ? totalInvested / totalAmount : 0;
+  return { amount: totalAmount, averageBuyPrice, totalInvested };
 }
 
 export interface Transaction {
@@ -146,6 +165,175 @@ export async function removeAsset(userId: string, coinId: string): Promise<void>
 
   const assetRef = doc(db, 'portfolios', userId, 'assets', coinId);
   await deleteDoc(assetRef);
+}
+
+// ── Lot CRUD ──────────────────────────────────────────────────────────
+
+/**
+ * Get all lots for an asset, sorted newest-first.
+ */
+export async function getLots(userId: string, coinId: string): Promise<Lot[]> {
+  if (!db) throw new Error('Firestore is not initialized');
+  const lotsRef = collection(db, 'portfolios', userId, 'assets', coinId, 'lots');
+  const snap = await getDocs(lotsRef);
+  const lots: Lot[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lot));
+  return lots.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Migrate a legacy flat asset to the lots subcollection.
+ * Creates one lot from the existing amount/averageBuyPrice/totalInvested.
+ * Safe to call multiple times — skips if lots already exist.
+ */
+export async function migrateLegacyAsset(userId: string, asset: PortfolioAsset): Promise<Lot[]> {
+  if (!db) throw new Error('Firestore is not initialized');
+  const coinId = asset.coinId;
+  const lotsRef = collection(db, 'portfolios', userId, 'assets', coinId, 'lots');
+  const existing = await getDocs(lotsRef);
+  if (!existing.empty) {
+    // Already has lots — return them sorted
+    const lots: Lot[] = existing.docs.map(d => ({ id: d.id, ...d.data() } as Lot));
+    return lots.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  // Build a single migration lot from flat fields
+  const legacyCreatedAt = asset.createdAt instanceof Date
+    ? asset.createdAt.toISOString()
+    : new Date(asset.createdAt).toISOString();
+  const migrationLot: Omit<Lot, 'id'> = {
+    createdAt: legacyCreatedAt,
+    amount: asset.amount,
+    buyPrice: asset.averageBuyPrice,
+    totalCost: asset.totalInvested,
+    note: '',
+  };
+  const newRef = doc(lotsRef);
+  await setDoc(newRef, migrationLot);
+  return [{ id: newRef.id, ...migrationLot }];
+}
+
+/**
+ * Record a new purchase for a coin — the correct entry point from the
+ * "Add Asset" form.
+ *
+ * - If the asset doesn't exist yet, creates an empty shell document first
+ *   (so addLot can do updateDoc on it).
+ * - Calls addLot() which creates a dated Lot with createdAt = now and
+ *   recomputes the aggregate fields (amount, averageBuyPrice, totalInvested).
+ *
+ * This ensures every purchase through "Add Asset" appears as its own
+ * time-stamped lot, exactly like "Add Purchase" in the expanded row.
+ */
+export async function addAssetWithLot(
+  userId: string,
+  coinId: string,
+  symbol: string,
+  name: string,
+  amount: number,
+  buyPrice: number,
+  note: string = '',
+): Promise<void> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const assetRef = doc(db, 'portfolios', userId, 'assets', coinId);
+  const snap = await getDoc(assetRef);
+
+  if (!snap.exists()) {
+    // Create the asset shell — aggregates will be written by addLot below
+    await setDoc(assetRef, {
+      userId,
+      coinId,
+      symbol,
+      name,
+      amount: 0,
+      averageBuyPrice: 0,
+      totalInvested: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  await addLot(userId, coinId, { amount, buyPrice, totalCost: amount * buyPrice, note });
+}
+
+/**
+ * Add a new lot and update the parent asset's aggregate fields.
+ * Returns the new lot ID.
+ */
+export async function addLot(
+  userId: string,
+  coinId: string,
+  lotData: { amount: number; buyPrice: number; totalCost: number; note: string }
+): Promise<string> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const lotsRef = collection(db, 'portfolios', userId, 'assets', coinId, 'lots');
+  const assetRef = doc(db, 'portfolios', userId, 'assets', coinId);
+
+  // Save the new lot with a server-side timestamp
+  const newLot: Omit<Lot, 'id'> = {
+    createdAt: new Date().toISOString(),
+    amount: lotData.amount,
+    buyPrice: lotData.buyPrice,
+    totalCost: lotData.totalCost,
+    note: lotData.note,
+  };
+  const newRef = doc(lotsRef);
+  await setDoc(newRef, newLot);
+
+  // Recompute aggregates from all lots
+  const allLotsSnap = await getDocs(lotsRef);
+  const allLots: Lot[] = allLotsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Lot));
+  const { amount, averageBuyPrice, totalInvested } = recalcFromLots(allLots);
+  await updateDoc(assetRef, { amount, averageBuyPrice, totalInvested, updatedAt: Timestamp.now() });
+
+  return newRef.id;
+}
+
+/**
+ * Delete a lot and update the parent asset's aggregate fields.
+ */
+export async function deleteLot(userId: string, coinId: string, lotId: string): Promise<void> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const lotRef = doc(db, 'portfolios', userId, 'assets', coinId, 'lots', lotId);
+  const assetRef = doc(db, 'portfolios', userId, 'assets', coinId);
+
+  await deleteDoc(lotRef);
+
+  // Recompute aggregates from remaining lots
+  const lotsRef = collection(db, 'portfolios', userId, 'assets', coinId, 'lots');
+  const remainingSnap = await getDocs(lotsRef);
+  const remaining: Lot[] = remainingSnap.docs.map(d => ({ id: d.id, ...d.data() } as Lot));
+  const { amount, averageBuyPrice, totalInvested } = recalcFromLots(remaining);
+  await updateDoc(assetRef, { amount, averageBuyPrice, totalInvested, updatedAt: Timestamp.now() });
+}
+
+/**
+ * Load all assets for a user with their lots subcollection populated.
+ * Auto-migrates legacy assets (no lots) on first access.
+ */
+export async function getUserAssetsWithLots(userId: string): Promise<PortfolioAsset[]> {
+  if (!db) throw new Error('Firestore is not initialized');
+
+  const assetsRef = collection(db, 'portfolios', userId, 'assets');
+  const snapshot = await getDocs(assetsRef);
+
+  const assets: PortfolioAsset[] = snapshot.docs.map(d => ({
+    id: d.id,
+    ...d.data(),
+    createdAt: d.data().createdAt?.toDate() || new Date(),
+    updatedAt: d.data().updatedAt?.toDate() || new Date(),
+  })) as PortfolioAsset[];
+
+  // Load lots for each asset in parallel; migrate legacy assets
+  const assetsWithLots = await Promise.all(
+    assets.map(async (asset) => {
+      const lots = await migrateLegacyAsset(userId, asset);
+      return { ...asset, lots };
+    })
+  );
+
+  return assetsWithLots;
 }
 
 /**

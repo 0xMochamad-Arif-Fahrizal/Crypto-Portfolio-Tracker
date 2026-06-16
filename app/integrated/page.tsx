@@ -23,6 +23,7 @@ import SourceAllocationCards from '@/components/SourceAllocationCards';
 import AllocationDonutChart, { AssetSlice } from '@/components/charts/AllocationDonutChart';
 import WalletTransactionList from '@/components/WalletTransactionList';
 import AppHeader from '@/components/ui/AppHeader';
+import Icon from '@/components/ui/Icon';
 
 interface TransactionDetail {
   txHash: string;
@@ -301,7 +302,7 @@ export default function IntegratedPage() {
               {ethLoading ? 'Analyzing…' : 'Load Ethereum'}
             </button>
             {walletData.isLoaded && !ethErr && (
-              <span className="cf-pill cf-pill-positive" style={{ flexShrink: 0 }}>✓ Loaded · address saved</span>
+              <span className="cf-pill cf-pill-positive" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Loaded · address saved</span>
             )}
           </div>
           {ethErr && <div style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--negative)' }}>{ethErr}</div>}
@@ -377,16 +378,14 @@ export default function IntegratedPage() {
             {/* Warnings */}
             {analyzeData?.warning && (
               <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--ink-2)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 1, flexShrink: 0 }}>
-                  <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
+                <Icon name="alert-triangle" size={16} style={{ marginTop: 1, flexShrink: 0, color: 'var(--ink-2)' }} />
                 <span className="cf-body cf-muted" style={{ fontSize: 13 }}>{analyzeData.warning}</span>
               </div>
             )}
 
             {analyzeData?.excludedCount > 0 && (
               <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <span className="cf-body cf-muted" style={{ fontSize: 13 }}>ℹ {analyzeData.excludedCount} transactions excluded from cost basis</span>
+                <span className="cf-body cf-muted" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="info" size={14} /> {analyzeData.excludedCount} transactions excluded from cost basis</span>
               </div>
             )}
 

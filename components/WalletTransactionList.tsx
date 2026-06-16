@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Icon from '@/components/ui/Icon';
 
 interface TransactionDetail {
   txHash: string;
@@ -68,7 +69,7 @@ function EditablePriceInput({
           autoFocus
         />
         <button onClick={() => { const p = parseFloat(draft); if (p > 0) onSave(p); setIsEditing(false); }} className="cf-ticker" style={{ color: 'var(--ink)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>Save</button>
-        <button onClick={() => setIsEditing(false)} className="cf-ticker" style={{ color: 'var(--ink-3)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>✕</button>
+        <button onClick={() => setIsEditing(false)} className="cf-ticker" style={{ color: 'var(--ink-3)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}><Icon name="x" size={13} /></button>
       </span>
     );
   }
@@ -80,7 +81,7 @@ function EditablePriceInput({
         title="Harga historis tidak tersedia — klik untuk masukkan harga beli dari exchange"
         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,152,0,0.08)', border: '1px solid rgba(255,152,0,0.3)', color: '#FF9800', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}
       >
-        ✎ Masukkan harga beli
+        <Icon name="pencil" size={11} /> Masukkan harga beli
       </button>
     );
   }
@@ -90,9 +91,9 @@ function EditablePriceInput({
       <button
         onClick={() => { setDraft(effectivePrice.toFixed(2)); setIsEditing(true); }}
         title={isOverridden ? `Harga exchange: $${effectivePrice.toFixed(2)} — klik untuk edit` : `Harga pasar CoinGecko: $${effectivePrice.toFixed(2)} — klik untuk masukkan harga beli exchange`}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: 13, textDecoration: 'underline dotted', cursor: 'pointer', background: 'none', border: 'none', padding: 0, color: isOverridden ? '#F59E0B' : 'var(--ink-3)' }}
+        style={{ fontFamily: 'var(--font-mono)', fontSize: 13, textDecoration: 'underline dotted', cursor: 'pointer', background: 'none', border: 'none', padding: 0, color: isOverridden ? '#F59E0B' : 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
       >
-        @ ${effectivePrice.toFixed(2)}{isOverridden ? ' ✎' : ''}
+        @ ${effectivePrice.toFixed(2)}{isOverridden ? <Icon name="pencil" size={11} /> : ''}
       </button>
       {isOverridden && (
         <button onClick={onReset} title="Reset ke harga pasar CoinGecko" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>reset</button>

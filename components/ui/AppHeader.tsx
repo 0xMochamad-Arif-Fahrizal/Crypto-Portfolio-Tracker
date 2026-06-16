@@ -3,12 +3,13 @@
 import { memo, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Icon from '@/components/ui/Icon';
 
 const TABS = [
-  { id: 'dashboard',  label: 'Dashboard',  href: '/dashboard'  },
-  { id: 'portfolio',  label: 'Portfolio',  href: '/portfolio'  },
-  { id: 'wallet',     label: 'Wallet',     href: '/wallet'     },
-  { id: 'integrated', label: 'Integrated', href: '/integrated' },
+  { id: 'dashboard',  label: 'Dashboard',  href: '/dashboard',  icon: 'bar-chart-3' as const },
+  { id: 'portfolio',  label: 'Portfolio',  href: '/portfolio',  icon: 'coins'        as const },
+  { id: 'wallet',     label: 'Wallet',     href: '/wallet',     icon: 'wallet'       as const },
+  { id: 'integrated', label: 'Integrated', href: '/integrated', icon: 'layers'       as const },
 ];
 
 interface AppHeaderProps {
@@ -95,8 +96,12 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
                   textDecoration: 'none',
                   transition: 'color 160ms, background 160ms',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
+                <Icon name={t.icon} size={13} />
                 {t.label}
               </Link>
             ))}
@@ -112,8 +117,9 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
             <button
               className="cf-btn cf-btn-ghost"
               onClick={onLogout}
-              style={{ height: 32 }}
+              style={{ height: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
+              <Icon name="log-out" size={14} />
               Logout
             </button>
           )}

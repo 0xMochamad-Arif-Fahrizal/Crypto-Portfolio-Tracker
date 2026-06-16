@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { searchCoins } from '@/lib/api/coingecko';
-import { addOrUpdateAsset, addTransaction } from '@/lib/firestore/portfolio';
+import { addAssetWithLot } from '@/lib/firestore/portfolio';
+import Icon from '@/components/ui/Icon';
 
 interface AddAssetFormProps {
   userId: string;
@@ -57,8 +58,7 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
     if (isNaN(buyPriceNum) || buyPriceNum <= 0) { setError('Please enter a valid buy price'); return; }
     setLoading(true);
     try {
-      await addOrUpdateAsset(userId, selectedCoin.id, selectedCoin.symbol.toUpperCase(), selectedCoin.name, amountNum, buyPriceNum);
-      await addTransaction({ userId, coinId: selectedCoin.id, symbol: selectedCoin.symbol.toUpperCase(), name: selectedCoin.name, type: 'buy', amount: amountNum, pricePerCoin: buyPriceNum, totalValue: amountNum * buyPriceNum, timestamp: new Date() });
+      await addAssetWithLot(userId, selectedCoin.id, selectedCoin.symbol.toUpperCase(), selectedCoin.name, amountNum, buyPriceNum);
       onSuccess();
     } catch {
       setError('Failed to add asset. Please try again.');
@@ -164,7 +164,7 @@ export default function AddAssetForm({ userId, onSuccess, onCancel }: AddAssetFo
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="cf-btn cf-btn-secondary" onClick={onCancel}>Cancel</button>
           <button type="submit" className="cf-btn cf-btn-primary" disabled={loading || !selectedCoin}>
-            {loading ? 'Adding…' : '+ Add Asset'}
+            {loading ? 'Adding…' : <><Icon name="plus" size={14} /> Add Asset</>}
           </button>
         </div>
       </form>

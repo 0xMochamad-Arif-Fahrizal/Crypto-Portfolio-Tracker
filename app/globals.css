@@ -26,3 +26,4 @@ body {
   to   { transform: rotate(360deg); }
 }
 .animate-spin-cf { animation: spin 700ms linear infinite; }
+.animate-spin    { animation: spin 1s linear infinite; }

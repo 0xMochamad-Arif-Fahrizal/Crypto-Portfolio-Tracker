@@ -5,6 +5,10 @@ import type { NextRequest } from 'next/server';
 // "/"           → public landing page; if logged in, the page component itself
 //                 redirects client-side to /dashboard (Firebase Auth is client-side only).
 // "/dashboard"  → requires auth; the page component redirects to /login when no user.
+// "/docs"       → public, no auth required.
+// "/privacy"    → public, no auth required.
+// "/terms"      → public, no auth required.
+// "/contact"    → public, no auth required.
 //
 // Server-side session cookies are not used, so no auth check is done here.
 // This file remains a transparent passthrough.

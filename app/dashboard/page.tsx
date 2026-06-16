@@ -22,6 +22,7 @@ import {
 import AppHeader from '@/components/ui/AppHeader';
 import CoinMark from '@/components/ui/CoinMark';
 import { useCountUp } from '@/components/ui/useCountUp';
+import Icon from '@/components/ui/Icon';
 
 type AssetSource = 'manual' | 'wallet' | 'mixed';
 
@@ -256,7 +257,15 @@ export default function DashboardPage() {
     : candidates.slice(0, DASHBOARD_MAX_VISIBLE_COINS).map((c) => c.coingeckoId);
   const visibleSet = new Set(effectiveVisibleIds);
   const visibleCoins = coins.filter((c) => visibleSet.has(c.id)).slice(0, DASHBOARD_MAX_VISIBLE_COINS);
-  const visibleRows = rows.filter((r) => visibleSet.has(r.coingeckoId)).slice(0, DASHBOARD_MAX_VISIBLE_COINS);
+  const visibleRows = rows
+    .filter((r) => visibleSet.has(r.coingeckoId))
+    .filter((r) => {
+      // Hide unknown SPL tokens (no CoinGecko mapping) that are dust / worthless
+      const isUnknownSpl = r.coingeckoId.startsWith('solana:');
+      const isDust = r.holdings < 1 && getCurrentValue(r) === 0;
+      return !(isUnknownSpl && isDust);
+    })
+    .slice(0, DASHBOARD_MAX_VISIBLE_COINS);
 
   const handleToggleVisible = (coingeckoId: string) => {
     setVisibleCoinIds((prev) => {
@@ -310,21 +319,18 @@ export default function DashboardPage() {
             <button
               className="cf-btn cf-btn-secondary"
               onClick={() => setShowSettings((v) => !v)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-              </svg>
+              <Icon name="settings" size={14} />
               Settings
             </button>
             <button
               className="cf-btn cf-btn-primary"
               onClick={() => { setLoading(true); loadDashboard(); }}
               disabled={loading}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
-                style={{ animation: loading ? 'spin 700ms linear infinite' : 'none' }}>
-                <path d="M21 12a9 9 0 1 1-3-6.7L21 8 M21 3v5h-5" />
-              </svg>
+              <Icon name="refresh-cw" size={14} className={loading ? 'animate-spin' : ''} />
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>

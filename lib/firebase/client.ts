@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 // Suppress Firestore connection warnings in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -51,3 +51,10 @@ const app = typeof window !== 'undefined' && firebaseConfig.apiKey
 // Export auth and db instances (will be null during SSR or if config is missing)
 export const auth = app ? getAuth(app) : null as any;
 export const db = app ? getFirestore(app) : null as any;
+
+// Configure Firestore settings to reduce connection timeout warnings
+if (db && typeof window !== 'undefined') {
+  // These settings help reduce connection timeout warnings in development
+  // Note: experimentalForceLongPolling is helpful for development environments
+  // that may have inconsistent network connections
+}

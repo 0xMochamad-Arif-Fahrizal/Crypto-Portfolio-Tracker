@@ -8,8 +8,10 @@ import { auth, db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/context/AuthContext';
 import { clearWalletAddress, getWalletAddresses, saveWalletAddresses } from '@/lib/firestore/wallets';
 import { type WalletBookEntry, addWalletBookEntry, deduplicateWalletBook, deleteWalletBookEntry, getWalletBook, renameWalletBookEntry, setActiveWallet } from '@/lib/firestore/walletBook';
+import { SOL_MINT_TO_COINGECKO } from '@/lib/solanaTokenMap';
 import AppHeader from '@/components/ui/AppHeader';
 import CoinMark from '@/components/ui/CoinMark';
+import Icon from '@/components/ui/Icon';
 
 const isValidEth = (a: string) => /^0x[a-fA-F0-9]{40}$/.test(a);
 const isValidSol = (a: string) => !a.startsWith('0x') && a.length >= 32 && a.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(a);
@@ -23,7 +25,22 @@ function detectChain(a: string): 'ETH' | 'SOL' | null {
 const truncate = (a: string) => a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
 
 interface EthBalance { eth: string; usdt: string; ethValueUSD: number; usdtValueUSD: number; }
-interface SolBalance { sol: number; solPriceUsd: number; }
+
+interface SplTokenInfo {
+  mint: string;
+  symbol: string | null;
+  name: string | null;
+  uiAmount: number;
+  coingeckoId: string | null;
+  priceUsd: number;
+}
+
+interface SolBalance {
+  sol: number;
+  solPriceUsd: number;
+  tokens: SplTokenInfo[];
+  totalValueUsd: number;
+}
 
 export default function WalletPage() {
   const { user, loading: authLoading } = useAuth();
@@ -121,18 +138,44 @@ export default function WalletPage() {
   async function fetchSolBalance(address: string) {
     setSolBalErr(null); setSolBalance(null); setSolLoading(true);
     try {
-      const [balResp, priceResp] = await Promise.all([fetch(`/api/solana/balance?address=${address}`), fetch('/api/prices?ids=solana')]);
+      const balResp = await fetch(`/api/solana/balance?address=${address}`);
       const balData = await balResp.json();
       if (!balResp.ok) throw new Error(balData?.error || 'Gagal mengambil saldo Solana.');
-      let solPriceUsd = 0;
+
+      const rawTokens: Array<{ mint: string; symbol: string | null; name: string | null; uiAmount: number; decimals: number }> = balData.tokens ?? [];
+
+      // Collect CoinGecko IDs for all mapped SPL tokens so we can fetch their prices in one call
+      const splCgIds = [...new Set(
+        rawTokens.map((t) => SOL_MINT_TO_COINGECKO[t.mint]).filter((id): id is string => Boolean(id)),
+      )];
+      const priceIds = ['solana', ...splCgIds].join(',');
+
+      const priceResp = await fetch(`/api/prices?ids=${priceIds}`);
+      const priceMap: Record<string, number> = {};
       if (priceResp.ok) {
         const priceData = await priceResp.json();
         if (Array.isArray(priceData)) {
-          const entry = priceData.find((c: { id?: string }) => c.id === 'solana');
-          solPriceUsd = (entry as { current_price?: number } | undefined)?.current_price ?? 0;
+          for (const c of priceData) {
+            if (c.id && (c.current_price as number) > 0) priceMap[c.id as string] = c.current_price as number;
+          }
         }
       }
-      setSolBalance({ sol: Number(balData.sol ?? 0), solPriceUsd });
+
+      const sol = Number(balData.sol ?? 0);
+      const solPriceUsd = priceMap['solana'] ?? 0;
+
+      const tokens: SplTokenInfo[] = rawTokens
+        .filter((t) => t.uiAmount > 0)
+        .map((t) => {
+          const coingeckoId = SOL_MINT_TO_COINGECKO[t.mint] ?? null;
+          const priceUsd = coingeckoId ? (priceMap[coingeckoId] ?? 0) : 0;
+          return { mint: t.mint, symbol: t.symbol, name: t.name, uiAmount: t.uiAmount, coingeckoId, priceUsd };
+        });
+
+      const splValue = tokens.reduce((sum, t) => sum + t.uiAmount * t.priceUsd, 0);
+      const totalValueUsd = sol * solPriceUsd + splValue;
+
+      setSolBalance({ sol, solPriceUsd, tokens, totalValueUsd });
     } catch (err) { setSolBalErr(err instanceof Error ? err.message : 'Gagal mengambil saldo Solana.'); }
     finally { setSolLoading(false); }
   }
@@ -242,6 +285,12 @@ export default function WalletPage() {
     try { if (auth) { await signOut(auth); router.push('/login'); } } catch {}
   }, [router]);
 
+  // Grand total computed values (only when at least one balance is loaded)
+  const ethTotalValue = ethBalance ? ethBalance.ethValueUSD + ethBalance.usdtValueUSD : null;
+  const solTotalValue = solBalance ? solBalance.totalValueUsd : null;
+  const grandTotal = (ethTotalValue ?? 0) + (solTotalValue ?? 0);
+  const showGrandTotal = ethTotalValue !== null || solTotalValue !== null;
+
   if (authLoading || pageLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -265,6 +314,9 @@ export default function WalletPage() {
     onEdit: () => void; onSave: () => void; onClear: () => void; onCheckBalance: () => void; onCancel: () => void;
   }) {
     const isEth = chain === 'ETH';
+    const eth = balance as EthBalance | null;
+    const sol = balance as SolBalance | null;
+
     return (
       <div className="cf-card cf-enter">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
@@ -282,7 +334,7 @@ export default function WalletPage() {
           <div style={{ padding: '12px 14px', background: 'var(--surface-inset)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span className="cf-ticker">Active Address</span>
-              <span className="cf-pill cf-pill-positive">✓ Active</span>
+              <span className="cf-pill cf-pill-positive" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Active</span>
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--positive)', wordBreak: 'break-all' }}>{saved}</div>
           </div>
@@ -311,11 +363,11 @@ export default function WalletPage() {
         {!editing && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
             <button className="cf-btn cf-btn-secondary" onClick={onEdit} style={{ flex: 1 }}>
-              {saved ? '✏ Edit address' : '+ Set address'}
+              {saved ? <><Icon name="pencil" size={13} /> Edit address</> : <><Icon name="plus" size={13} /> Set address</>}
             </button>
             {saved && (
               <button className="cf-btn cf-btn-danger" onClick={onClear} disabled={clearing}>
-                {clearing ? '…' : '✕ Clear'}
+                {clearing ? '…' : <><Icon name="x" size={13} /> Clear</>}
               </button>
             )}
           </div>
@@ -324,7 +376,7 @@ export default function WalletPage() {
 
         {saved && !editing && (
           <button className="cf-btn cf-btn-ghost" onClick={onCheckBalance} disabled={balLoading} style={{ width: '100%' }}>
-            {balLoading ? 'Checking…' : 'Check Balance'}
+            {balLoading ? 'Checking…' : <><Icon name="external-link" size={13} /> Check Balance</>}
           </button>
         )}
 
@@ -332,33 +384,100 @@ export default function WalletPage() {
           <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--negative-bg)', border: '1px solid rgba(255,59,48,0.25)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--negative)' }}>{balErr}</div>
         )}
 
-        {balance && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-            {isEth ? (
-              <>
-                <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div className="cf-ticker" style={{ marginBottom: 6 }}>ETH</div>
-                  <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>{parseFloat((balance as EthBalance).eth).toFixed(4)} Ξ</div>
-                  <div className="cf-num cf-muted" style={{ fontSize: 11, marginTop: 4 }}>${(balance as EthBalance).ethValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        {/* ── ETH balance breakdown ─────────────────────────────────────── */}
+        {balance && isEth && eth && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div className="cf-ticker" style={{ marginBottom: 6 }}>ETH</div>
+                <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>{parseFloat(eth.eth).toFixed(4)} Ξ</div>
+                <div className="cf-num cf-muted" style={{ fontSize: 11, marginTop: 4 }}>${eth.ethValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div className="cf-ticker" style={{ marginBottom: 6 }}>USDT</div>
+                <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>${parseFloat(eth.usdt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="cf-num cf-muted" style={{ fontSize: 11, marginTop: 4 }}>≈ stablecoin</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div className="cf-ticker" style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em' }}>Total ETH Wallet Value</div>
+              <div className="cf-num" style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>
+                ${(eth.ethValueUSD + eth.usdtValueUSD).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SOL balance + SPL tokens breakdown ───────────────────────── */}
+        {balance && !isEth && sol && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+            {/* SOL row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div className="cf-ticker" style={{ marginBottom: 6 }}>SOL Balance</div>
+                <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>{sol.sol.toFixed(4)} ◎</div>
+              </div>
+              <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div className="cf-ticker" style={{ marginBottom: 6 }}>SOL Value</div>
+                <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>
+                  {sol.solPriceUsd > 0
+                    ? `$${(sol.sol * sol.solPriceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : '—'}
                 </div>
-                <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div className="cf-ticker" style={{ marginBottom: 6 }}>USDT</div>
-                  <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>${parseFloat((balance as EthBalance).usdt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="cf-num cf-muted" style={{ fontSize: 11, marginTop: 4 }}>≈ stablecoin</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div className="cf-ticker" style={{ marginBottom: 6 }}>SOL</div>
-                  <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>{(balance as SolBalance).sol.toFixed(4)} ◎</div>
-                </div>
-                <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div className="cf-ticker" style={{ marginBottom: 6 }}>SOL Value (USD)</div>
-                  <div className="cf-num" style={{ fontSize: 16, fontWeight: 500 }}>${((balance as SolBalance).sol * (balance as SolBalance).solPriceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                </div>
-              </>
+              </div>
+            </div>
+
+            {/* SPL tokens */}
+            {sol.tokens.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 10 }}>
+                <div className="cf-ticker" style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em', marginBottom: 10 }}>SPL Tokens</div>
+                {sol.tokens.map((token, i) => (
+                  <div
+                    key={token.mint}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 0',
+                      borderBottom: i < sol.tokens.length - 1 ? '1px solid var(--border)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <CoinMark symbol={token.symbol ?? '?'} size={22} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="cf-ticker" style={{ fontWeight: 600, color: 'var(--ink)' }}>{token.symbol ?? 'Unknown'}</div>
+                        <div className="cf-ticker" style={{ fontSize: 10, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                          {token.name ?? `${token.mint.slice(0, 8)}…`}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                      <div className="cf-num" style={{ fontSize: 13 }}>
+                        {token.uiAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })}
+                      </div>
+                      <div
+                        className="cf-num"
+                        style={{
+                          fontSize: 11,
+                          color: token.priceUsd > 0 ? 'var(--ink-2)' : 'var(--ink-3)',
+                          fontStyle: token.priceUsd === 0 ? 'italic' : 'normal',
+                        }}
+                      >
+                        {token.priceUsd > 0
+                          ? `$${(token.uiAmount * token.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : 'No price data'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
+
+            {/* Total */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div className="cf-ticker" style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.08em' }}>Total Solana Value</div>
+              <div className="cf-num" style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>
+                ${sol.totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -403,6 +522,33 @@ export default function WalletPage() {
                 onCancel={() => { setSolEditing(false); setSolInput(''); setSolErr(null); }}
               />
             </div>
+
+            {/* Grand total card — visible after at least one balance is loaded */}
+            {showGrandTotal && (
+              <div className="cf-card cf-enter" style={{ marginTop: 16, background: 'var(--surface-inset)' }}>
+                <div className="cf-section-title" style={{ marginBottom: 14 }}>— Total Wallet Value</div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {ethTotalValue !== null && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span className="cf-ticker">ETH Wallet</span>
+                      <span className="cf-num" style={{ fontSize: 15 }}>${ethTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {solTotalValue !== null && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span className="cf-ticker">SOL Wallet</span>
+                      <span className="cf-num" style={{ fontSize: 15 }}>${solTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginTop: 4 }}>
+                    <span className="cf-ticker" style={{ fontWeight: 600, color: 'var(--ink)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</span>
+                    <span className="cf-num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>
+                      ${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Section 2: Address book */}
@@ -412,7 +558,7 @@ export default function WalletPage() {
             {bookErr && (
               <div style={{ marginBottom: 12, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--negative-bg)', border: '1px solid rgba(255,59,48,0.25)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--negative)' }}>
                 {bookErr}
-                <button onClick={() => setBookErr(null)} style={{ opacity: 0.6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--negative)' }}>✕</button>
+                <button onClick={() => setBookErr(null)} style={{ opacity: 0.6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--negative)', display: 'flex', alignItems: 'center' }}><Icon name="x" size={14} /></button>
               </div>
             )}
 
@@ -445,7 +591,7 @@ export default function WalletPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                               <span style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 500 }}>{entry.name}</span>
                               <span className="cf-tag">{entry.chain}</span>
-                              {isEntryActive(entry) && <span className="cf-pill cf-pill-positive">✓ Aktif</span>}
+                              {isEntryActive(entry) && <span className="cf-pill cf-pill-positive" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Aktif</span>}
                             </div>
                             <div className="cf-num cf-muted" style={{ fontSize: 12 }}>{truncate(entry.address)}</div>
                           </div>
@@ -456,9 +602,9 @@ export default function WalletPage() {
                               {settingActiveId === entry.id ? '…' : 'Set Active'}
                             </button>
                           )}
-                          <button className="cf-btn cf-btn-ghost" style={{ height: 30, padding: '0 10px' }} onClick={() => { setEditingId(entry.id); setEditName(entry.name); setRenameErr(null); }}>✏</button>
+                          <button className="cf-btn cf-btn-ghost" style={{ height: 30, padding: '0 10px' }} onClick={() => { setEditingId(entry.id); setEditName(entry.name); setRenameErr(null); }}><Icon name="pencil" size={13} /></button>
                           <button className="cf-btn cf-btn-danger" style={{ height: 30, padding: '0 10px' }} onClick={() => handleDelete(entry.id)} disabled={isEntryActive(entry) || deletingId === entry.id}>
-                            {deletingId === entry.id ? '…' : '✕'}
+                            {deletingId === entry.id ? '…' : <Icon name="x" size={13} />}
                           </button>
                         </div>
                       </>
@@ -479,7 +625,7 @@ export default function WalletPage() {
                 <div>
                   <label className="cf-label">
                     Address
-                    {detectedChain && <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 400 }}>— {detectedChain} terdeteksi ✓</span>}
+                    {detectedChain && <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 400, display: 'inline-flex', alignItems: 'center', gap: 4 }}>— {detectedChain} terdeteksi <Icon name="check" size={12} style={{ color: 'var(--positive)' }} /></span>}
                   </label>
                   <input className="cf-input" type="text" value={addAddress} onChange={(e) => setAddAddress(e.target.value)} placeholder="0x… atau base58 Solana…" spellCheck={false} autoCapitalize="off" autoCorrect="off" />
                 </div>
@@ -487,7 +633,7 @@ export default function WalletPage() {
               {addErr && <div style={{ marginBottom: 12, color: 'var(--negative)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{addErr}</div>}
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button className="cf-btn cf-btn-primary" onClick={handleAddToBook} disabled={addSaving || !addName.trim() || !detectedChain}>
-                  {addSaving ? 'Menyimpan…' : '+ Save to Address Book'}
+                  {addSaving ? 'Menyimpan…' : <><Icon name="plus" size={14} /> Save to Address Book</>}
                 </button>
               </div>
             </div>
@@ -496,9 +642,7 @@ export default function WalletPage() {
           {/* Info note */}
           <div className="cf-card" style={{ background: 'var(--surface-inset)' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="var(--ink-2)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
+              <Icon name="info" size={18} style={{ marginTop: 2, flexShrink: 0, color: 'var(--ink-2)' }} />
               <div>
                 <div className="cf-body" style={{ fontWeight: 500, marginBottom: 4 }}>How addresses are used</div>
                 <div className="cf-body cf-muted">

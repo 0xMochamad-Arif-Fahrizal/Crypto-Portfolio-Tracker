@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/context/AuthContext';
-import { getUserAssets, calculatePortfolioSummary, removeAsset, PortfolioAsset } from '@/lib/firestore/portfolio';
+import { getUserAssetsWithLots, calculatePortfolioSummary, removeAsset, PortfolioAsset } from '@/lib/firestore/portfolio';
 import { fetchCoinPrices } from '@/lib/api/coingecko';
 import PortfolioSummary from '@/components/PortfolioSummary';
 import PortfolioTable from '@/components/PortfolioTable';
 import AddAssetForm from '@/components/AddAssetForm';
 import AppHeader from '@/components/ui/AppHeader';
+import Icon from '@/components/ui/Icon';
 
 export default function PortfolioPage() {
   const { user, loading: authLoading } = useAuth();
@@ -30,7 +31,7 @@ export default function PortfolioPage() {
     try {
       setError(null);
       setLoading(true);
-      const userAssets = await getUserAssets(user.uid);
+      const userAssets = await getUserAssetsWithLots(user.uid);
       setAssets(userAssets);
       if (userAssets.length > 0) {
         try {
@@ -104,18 +105,20 @@ export default function PortfolioPage() {
         {/* Page header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
           <div>
-            <div className="cf-section-title" style={{ marginBottom: 10 }}>— My Portfolio</div>
-            <h1 className="cf-h2" style={{ margin: 0 }}>Portfolio</h1>
-            <p className="cf-body cf-muted" style={{ margin: '6px 0 0' }}>{user.email}</p>
+            <div className="cf-section-title" style={{ marginBottom: 10 }}>— Portfolio</div>
+            <h1 className="cf-h2" style={{ margin: 0 }}>My manual assets</h1>
+            <p className="cf-body cf-muted" style={{ margin: '6px 0 0' }}>
+              Logged by hand · @{user.displayName || user.email?.split('@')[0]} · click a row for details
+            </p>
           </div>
           <button
             className="cf-btn cf-btn-primary"
             onClick={() => setShowAddForm((v) => !v)}
           >
             {showAddForm ? (
-              <>✕ Cancel</>
+              <><Icon name="x" size={14} /> Cancel</>
             ) : (
-              <>+ Add Asset</>
+              <><Icon name="plus" size={14} /> Add Asset</>
             )}
           </button>
         </div>
@@ -147,7 +150,9 @@ export default function PortfolioPage() {
             <PortfolioTable
               assets={assets}
               currentPrices={currentPrices}
+              userId={user.uid}
               onRemove={handleRemoveAsset}
+              onAssetsUpdate={setAssets}
             />
           </div>
         )}

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/context/AuthContext';
+import Icon from '@/components/ui/Icon';
 
 const DEMO_PRICES = [
   { symbol: 'BTC', price: 67420.18, change: 2.34 },
@@ -234,7 +235,7 @@ export default function LandingPage() {
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {FREE_FEATURES.map((t) => (
                   <li key={t} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-sans)', fontSize: 14 }}>
-                    <span style={{ color: 'var(--positive)', fontWeight: 700, fontSize: 12 }}>✓</span>
+                    <Icon name="check" size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
                     {t}
                   </li>
                 ))}
@@ -276,9 +277,10 @@ export default function LandingPage() {
             <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>v0.1 · Read-only · Next.js 16</span>
           </div>
           <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            {['Docs', 'Privacy', 'Terms', 'Contact'].map((l) => (
-              <a key={l} href="#" className="cf-ticker" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>{l}</a>
-            ))}
+            <Link href="/docs" className="cf-ticker" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Docs</Link>
+            <Link href="/privacy" className="cf-ticker" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Privacy</Link>
+            <Link href="/terms" className="cf-ticker" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Terms</Link>
+            <Link href="/contact" className="cf-ticker" style={{ color: 'var(--ink-2)', textDecoration: 'none' }}>Contact</Link>
           </div>
         </div>
       </footer>
