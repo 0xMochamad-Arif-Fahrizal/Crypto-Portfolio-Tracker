@@ -42,6 +42,8 @@ next-env.d.ts
 
 .claude/
 .cursor/
+.kiro/
+.vscode/
 logs/
 
 lib/price-cache.json
