@@ -43,10 +43,18 @@ export interface AuditOutRow {
 }
 
 export interface AuditReconciliation {
-  method: 'WAC' | 'none';
+  /** 'FIFO-UNTRACKED-OUT': FIFO balance too HIGH vs on-chain (untracked
+   *  outflow) — consumes the shortfall oldest-lot-first, preserving per-lot
+   *  price traceability.
+   *  'UNDER-COUNTED-INFLOW-DETECTED': the opposite case — FIFO balance too
+   *  LOW vs on-chain (untracked inflow). Detected and reported only; no lot
+   *  is fabricated since the missing value's price/origin are unknown.
+   *  'WAC' is the legacy blended-price method, kept only so old audit data
+   *  can still be rendered. */
+  method: 'FIFO-UNTRACKED-OUT' | 'UNDER-COUNTED-INFLOW-DETECTED' | 'WAC' | 'none';
   fifoBeforeReconcile: number;
   onChainBalance: number;
-  wac: number;           // weighted average cost per ETH
+  wac: number;           // informational: cost basis / balance before reconciliation
   scaleFactor: number;
   adjustedCostBasis: number;
 }
@@ -188,9 +196,25 @@ function buildLines(s: AuditSummary, ansi: boolean): string[] {
 
   // ── FIFO Reconciliation ───────────────────────────────────────────────────
   push(b('┌─ FIFO RECONCILIATION ───────────────────────────────────────────'));
-  if (s.reconciliation && s.reconciliation.method === 'WAC') {
+  if (s.reconciliation && s.reconciliation.method === 'FIFO-UNTRACKED-OUT') {
     const rec = s.reconciliation;
-    push(`  Method      : ${y('Weighted Average Cost (WAC)')}`);
+    push(`  Method      : ${y('FIFO consumption of untracked outflow (oldest lot first)')}`);
+    push(`  FIFO total  : ${rec.fifoBeforeReconcile.toFixed(6)} ETH`);
+    push(`  On-chain    : ${rec.onChainBalance.toFixed(6)} ETH`);
+    push(`  Consumed    : ${y((rec.fifoBeforeReconcile - rec.onChainBalance).toFixed(6))} ETH (untracked bridge/internal txs, removed oldest-lot-first)`);
+    push(`  Adj cost    : $${rec.adjustedCostBasis.toFixed(2)}`);
+    push(`  ${gr('Surviving lots keep their original per-unit price — traceable to source tx.')}`);
+  } else if (s.reconciliation && s.reconciliation.method === 'UNDER-COUNTED-INFLOW-DETECTED') {
+    const rec = s.reconciliation;
+    push(`  Method      : ${r('Under-counted inflow DETECTED — not auto-corrected')}`);
+    push(`  FIFO total  : ${rec.fifoBeforeReconcile.toFixed(6)} ETH`);
+    push(`  On-chain    : ${rec.onChainBalance.toFixed(6)} ETH`);
+    push(`  Missing     : ${r((rec.onChainBalance - rec.fifoBeforeReconcile).toFixed(6))} ETH received via a channel not captured by Etherscan's txlist/txlistinternal`);
+    push(`  ${gr('No lot fabricated — origin and price of the missing ETH are unknown. Cost basis below is understated by this amount.')}`);
+  } else if (s.reconciliation && s.reconciliation.method === 'WAC') {
+    // Legacy path — kept only so previously-generated audit data still renders.
+    const rec = s.reconciliation;
+    push(`  Method      : ${y('Weighted Average Cost (WAC) — legacy')}`);
     push(`  FIFO total  : ${rec.fifoBeforeReconcile.toFixed(6)} ETH`);
     push(`  On-chain    : ${rec.onChainBalance.toFixed(6)} ETH`);
     push(`  Mismatch    : ${y((rec.fifoBeforeReconcile - rec.onChainBalance).toFixed(6))} ETH (untracked bridge/internal txs)`);
@@ -219,8 +243,10 @@ function buildLines(s: AuditSummary, ansi: boolean): string[] {
     warnings.push(`${s.zeroPriceCount} transaction(s) with MISSING historical price — cost basis understated`);
   if (s.unmatchedOutEth > 0.0001)
     warnings.push(`${s.unmatchedOutEth.toFixed(6)} ETH sold with no tracked cost basis — data incomplete`);
-  if (s.reconciliation?.method === 'WAC')
-    warnings.push(`WAC reconciliation applied — ${(s.reconciliation.fifoBeforeReconcile - s.reconciliation.onChainBalance).toFixed(6)} ETH untracked`);
+  if (s.reconciliation?.method === 'FIFO-UNTRACKED-OUT' || s.reconciliation?.method === 'WAC')
+    warnings.push(`Untracked-outflow reconciliation applied (${s.reconciliation.method}) — ${(s.reconciliation.fifoBeforeReconcile - s.reconciliation.onChainBalance).toFixed(6)} ETH untracked`);
+  if (s.reconciliation?.method === 'UNDER-COUNTED-INFLOW-DETECTED')
+    warnings.push(`Under-counted inflow detected — ${(s.reconciliation.onChainBalance - s.reconciliation.fifoBeforeReconcile).toFixed(6)} ETH received via an untracked channel, NOT auto-corrected`);
 
   if (warnings.length > 0) {
     push(b('┌─ DATA QUALITY WARNINGS ─────────────────────────────────────────'));

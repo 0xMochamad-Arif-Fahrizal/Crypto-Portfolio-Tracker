@@ -10,10 +10,49 @@ import {
   type AuditSummary,
 } from './audit';
 
-// Maximum transactions to process for performance (oldest first for FIFO)
-const MAX_TRANSACTIONS = 100;
+// ── Etherscan pagination ──────────────────────────────────────────────────
+// Etherscan's account endpoints are requested at up to 10,000 records per
+// call via `offset`, but the API does NOT reliably honor that — verified
+// live against a real high-volume wallet (Ethereum Foundation "EF1"):
+// requesting offset=10000 silently returned only 1000 records, while
+// requesting offset=500 was honored exactly. A "partial page" (fewer
+// records than requested) is therefore NOT a trustworthy end-of-history
+// signal and must never be used to stop pagination — only a genuinely EMPTY
+// page (or zero new records after dedup) reliably means "no more data". We
+// paginate by advancing `startblock` past the last page's max block number
+// and re-fetching until that empty-page signal is observed.
+//
+// SAFETY_MAX_PAGES bounds worst-case pagination for pathological addresses
+// (e.g. a DEX router with tens of millions of transactions) so a single
+// request can't loop indefinitely. If this cap is hit, the result is marked
+// `isTruncated: true` and the exact number of records fetched is reported —
+// never silently dropped, and never applied asymmetrically between incoming
+// and outgoing transactions (both come from the same paginated fetch). Set
+// generously (200 pages) since the real per-call size is smaller than the
+// requested offset — a real 21,094-record wallet (Binance Hot Wallet 20)
+// needed 23 pages to fetch in full.
+const ETHERSCAN_PAGE_SIZE = 10000;
+const SAFETY_MAX_PAGES = 200;
 const DEBUG_ENDPOINT = 'http://127.0.0.1:7373/ingest/82684194-a1d7-4727-9637-324b6d91e3e7';
 const DEBUG_SESSION_ID = '727dcd';
+
+// Etherscan returns status:"0" for BOTH a genuine "no more transactions"
+// terminal state AND real errors (rate limits, invalid params, transient
+// failures) — the two are only distinguishable via `message`. Treating any
+// non-"1" status as "empty" (as this used to do) silently truncates history
+// on transient errors with no indication anything went wrong — caught live:
+// one capture returned 2 transactions instead of the correct 12 with zero
+// warning; a retry moments later returned the correct 12. A non-"1" status
+// is now only ever treated as "done" when the message exactly matches a
+// known empty-result message; anything else is retried with backoff, and if
+// retries are exhausted, reported via `fetchError` — never silently dropped.
+const ETHERSCAN_EMPTY_RESULT_MESSAGES = new Set(['no transactions found']);
+const MAX_FETCH_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface EtherscanTransaction {
   blockNumber: string;
@@ -117,6 +156,150 @@ function debugLog(
   // #endregion
 }
 
+interface PaginatedFetchResult {
+  transactions: EtherscanTransaction[];
+  /** true only if SAFETY_MAX_PAGES was hit — real pagination otherwise runs
+   *  to the true end of history (a partial page from Etherscan). */
+  truncated: boolean;
+  pagesFetched: number;
+  /** Non-null only if a genuine Etherscan API error (not a legitimate empty
+   *  result) survived MAX_FETCH_RETRIES retries. When set, `transactions`
+   *  reflects whatever was fetched before the error and MUST NOT be treated
+   *  as the wallet's complete history — the caller is responsible for
+   *  surfacing this rather than silently proceeding as if it were complete. */
+  fetchError: string | null;
+}
+
+/**
+ * Fetch a wallet's FULL transaction history for one Etherscan account action
+ * (txlist / txlistinternal / tokentx), paginating past the ~10,000-record
+ * per-call limit by advancing `startblock` to the last page's max block and
+ * re-fetching. Explicitly reports truncation (with exact fetched count) if
+ * SAFETY_MAX_PAGES is hit — never silently drops data.
+ */
+async function fetchAllEtherscanTx(
+  action: 'txlist' | 'txlistinternal' | 'tokentx',
+  address: string,
+  apiKey: string,
+  extraParams: string = ''
+): Promise<PaginatedFetchResult> {
+  const all: EtherscanTransaction[] = [];
+  const seen = new Set<string>();
+  let cursorStartBlock = 0;
+  let pagesFetched = 0;
+  let truncated = false;
+  let fetchError: string | null = null;
+  let retriesOnCurrentPage = 0;
+
+  while (pagesFetched < SAFETY_MAX_PAGES) {
+    const cacheBust = Date.now();
+    const url =
+      `https://api.etherscan.io/v2/api?chainid=1&module=account&action=${action}` +
+      `&address=${address}${extraParams}` +
+      `&startblock=${cursorStartBlock}&endblock=99999999` +
+      `&page=1&offset=${ETHERSCAN_PAGE_SIZE}&sort=asc&apikey=${apiKey}&_=${cacheBust}`;
+
+    const res = await fetch(url, {
+      headers: { 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${action} history from Etherscan (HTTP ${res.status})`);
+    }
+    const data = await res.json();
+    pagesFetched += 1;
+
+    if (data.status !== '1') {
+      const msg = typeof data.message === 'string' ? data.message.trim() : '';
+      const isGenuineEmpty = ETHERSCAN_EMPTY_RESULT_MESSAGES.has(msg.toLowerCase());
+      // Etherscan sometimes puts the actual detail in `result` (a string,
+      // not the usual array) while `message` is just a generic "NOTOK" —
+      // e.g. an invalid API key returns message:"NOTOK",
+      // result:"Invalid API Key (#err2)". Prefer the more specific string
+      // when present so a surfaced error is actually actionable.
+      const detail = typeof data.result === 'string' && data.result.trim() ? data.result.trim() : msg;
+
+      if (isGenuineEmpty) {
+        break; // normal terminal state
+      }
+
+      // A non-"1" status whose message we don't recognize as a legitimate
+      // empty result. This includes rate limits, invalid params, transient
+      // failures, and any message we haven't seen before — treat all of
+      // these as errors, not as "the wallet has fewer transactions than it
+      // does". Retry with exponential backoff before giving up.
+      if (retriesOnCurrentPage < MAX_FETCH_RETRIES) {
+        retriesOnCurrentPage += 1;
+        pagesFetched -= 1; // failed attempt, don't count it against the caller-visible page count
+        console.warn(
+          `Etherscan ${action} error on attempt ${retriesOnCurrentPage}/${MAX_FETCH_RETRIES} ` +
+          `(startblock=${cursorStartBlock}): "${detail || 'unknown error'}" — retrying...`
+        );
+        await sleep(RETRY_BASE_DELAY_MS * 2 ** (retriesOnCurrentPage - 1));
+        continue;
+      }
+
+      // Retries exhausted. Do NOT silently return partial data as if it
+      // were complete — record the error so the caller can surface it.
+      fetchError = detail || 'Unknown Etherscan API error';
+      console.error(
+        `Etherscan ${action}: giving up after ${MAX_FETCH_RETRIES} retries ` +
+        `(startblock=${cursorStartBlock}): "${fetchError}"`
+      );
+      break;
+    }
+    retriesOnCurrentPage = 0; // reset once a page succeeds
+
+    const page: EtherscanTransaction[] = data.result || [];
+    if (page.length === 0) break;
+
+    let newInPage = 0;
+    let maxBlockInPage = cursorStartBlock;
+    for (const tx of page) {
+      const key = `${tx.hash}-${tx.from}-${tx.to}-${tx.value}-${tx.timeStamp}-${tx.traceId || ''}`;
+      const blockNum = parseInt(tx.blockNumber, 10);
+      if (blockNum > maxBlockInPage) maxBlockInPage = blockNum;
+      if (!seen.has(key)) {
+        seen.add(key);
+        all.push(tx);
+        newInPage += 1;
+      }
+    }
+
+    // NOTE: deliberately no "page.length < ETHERSCAN_PAGE_SIZE means done"
+    // check here — empirically disproven (see comment above). We always
+    // advance and re-query after a non-empty page; only a genuinely empty
+    // page or a stuck cursor (checked below) ends the loop.
+
+    if (newInPage === 0) {
+      // Every record in this page was already seen — we re-fetched the
+      // boundary block (as designed) and found nothing beyond it. This is
+      // the expected, normal way pagination now ends (see note above about
+      // why a partial page can't be trusted as the end signal): NOT a
+      // truncation, just confirmation we've reached the true end of history.
+      break;
+    }
+
+    if (maxBlockInPage === cursorStartBlock) {
+      // New records exist, but all of them share the exact same block as
+      // the cursor — more records live in a single block than fit in one
+      // page, so we can't safely advance without risking skipped
+      // transactions. Genuinely truncated (a real, rare pathological case);
+      // report explicitly rather than loop forever or silently drop data.
+      truncated = true;
+      break;
+    }
+
+    cursorStartBlock = maxBlockInPage; // re-fetch the boundary block too; `seen` dedupes the overlap
+  }
+
+  if (pagesFetched >= SAFETY_MAX_PAGES) {
+    truncated = true;
+  }
+
+  return { transactions: all, truncated, pagesFetched, fetchError };
+}
+
 /**
  * Analyze wallet transaction history to calculate cost basis
  * Uses Etherscan API to fetch transactions and CoinGecko for historical prices
@@ -161,57 +344,54 @@ export async function GET(request: NextRequest) {
       console.log(`Excluding ${excludedHashes.length} transactions from analysis`);
     }
 
-    // Add cache-busting timestamp to prevent stale data
-    const timestamp = Date.now();
-
-    // Fetch ETH transactions (V2 API) with cache-busting
-    const ethTxUrl = `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=asc&apikey=${ETHERSCAN_API_KEY}&_=${timestamp}`;
-    
-    // Fetch ETH internal transactions (V2 API) - these are ETH transfers from smart contracts
-    const ethInternalTxUrl = `https://api.etherscan.io/v2/api?chainid=1&module=account&action=txlistinternal&address=${address}&startblock=0&endblock=99999999&sort=asc&apikey=${ETHERSCAN_API_KEY}&_=${timestamp}`;
-    
-    // Fetch USDT (ERC-20) transactions (V2 API) with cache-busting
+    // USDT (ERC-20) contract — also used as the extra query param for the
+    // paginated tokentx fetch below.
     const USDT_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
-    const usdtTxUrl = `https://api.etherscan.io/v2/api?chainid=1&module=account&action=tokentx&contractaddress=${USDT_CONTRACT}&address=${address}&startblock=0&endblock=99999999&sort=asc&apikey=${ETHERSCAN_API_KEY}&_=${timestamp}`;
 
-    const [ethResponse, ethInternalResponse, usdtResponse] = await Promise.all([
-      fetch(ethTxUrl, {
-        headers: { 'Cache-Control': 'no-cache' },
-        cache: 'no-store',
-      }),
-      fetch(ethInternalTxUrl, {
-        headers: { 'Cache-Control': 'no-cache' },
-        cache: 'no-store',
-      }),
-      fetch(usdtTxUrl, {
-        headers: { 'Cache-Control': 'no-cache' },
-        cache: 'no-store',
-      }),
+    // Fetch FULL transaction history for all three sources, paginated to
+    // completion (or the explicit safety cap — see fetchAllEtherscanTx).
+    const [ethResult, ethInternalResult, usdtResult] = await Promise.all([
+      fetchAllEtherscanTx('txlist', address, ETHERSCAN_API_KEY),
+      fetchAllEtherscanTx('txlistinternal', address, ETHERSCAN_API_KEY),
+      fetchAllEtherscanTx('tokentx', address, ETHERSCAN_API_KEY, `&contractaddress=${USDT_CONTRACT}`),
     ]);
 
-    if (!ethResponse.ok || !ethInternalResponse.ok || !usdtResponse.ok) {
-      throw new Error('Failed to fetch transaction history from Etherscan');
-    }
+    const ethTransactions: EtherscanTransaction[] = ethResult.transactions;
+    const ethInternalTransactions: EtherscanTransaction[] = ethInternalResult.transactions;
+    const usdtTransactions: EtherscanTransaction[] = usdtResult.transactions;
 
-    const ethData = await ethResponse.json();
-    const ethInternalData = await ethInternalResponse.json();
-    const usdtData = await usdtResponse.json();
+    // Truncation is decided at the fetch layer, symmetrically for the whole
+    // transaction set (not applied to incoming only) — this is what fixes
+    // the previous asymmetric-USDT-truncation bug: whatever was fetched here
+    // is used in full for both incoming and outgoing in both calculators.
+    const ethTruncated = ethResult.truncated || ethInternalResult.truncated;
+    const usdtTruncated = usdtResult.truncated;
 
-    if (ethData.status !== '1' && ethData.message !== 'No transactions found') {
-      console.error('Etherscan ETH error:', ethData.message);
-    }
+    // A non-null fetchError means a real Etherscan API error survived all
+    // retries during pagination for that source — the transactions fetched
+    // for it are an unknown-completeness partial history, NOT a legitimate
+    // "wallet has fewer transactions" result. Collected per-source so the
+    // response can name exactly which fetch(es) were affected.
+    const fetchErrors: { source: string; message: string }[] = [];
+    if (ethResult.fetchError) fetchErrors.push({ source: 'txlist (ETH)', message: ethResult.fetchError });
+    if (ethInternalResult.fetchError) fetchErrors.push({ source: 'txlistinternal (ETH internal)', message: ethInternalResult.fetchError });
+    if (usdtResult.fetchError) fetchErrors.push({ source: 'tokentx (USDT)', message: usdtResult.fetchError });
 
-    if (ethInternalData.status !== '1' && ethInternalData.message !== 'No transactions found') {
-      console.error('Etherscan ETH internal error:', ethInternalData.message);
-    }
+    const fetchStats = {
+      ethTxFetched: ethTransactions.length,
+      ethInternalTxFetched: ethInternalTransactions.length,
+      usdtTxFetched: usdtTransactions.length,
+      ethPagesFetched: ethResult.pagesFetched,
+      ethInternalPagesFetched: ethInternalResult.pagesFetched,
+      usdtPagesFetched: usdtResult.pagesFetched,
+    };
 
-    if (usdtData.status !== '1' && usdtData.message !== 'No transactions found') {
-      console.error('Etherscan USDT error:', usdtData.message);
-    }
-
-    const ethTransactions: EtherscanTransaction[] = ethData.result || [];
-    const ethInternalTransactions: EtherscanTransaction[] = ethInternalData.result || [];
-    const usdtTransactions: EtherscanTransaction[] = usdtData.result || [];
+    console.log(
+      `Fetched ${fetchStats.ethTxFetched} ETH tx (${fetchStats.ethPagesFetched} page(s)), ` +
+      `${fetchStats.ethInternalTxFetched} internal tx (${fetchStats.ethInternalPagesFetched} page(s)), ` +
+      `${fetchStats.usdtTxFetched} USDT tx (${fetchStats.usdtPagesFetched} page(s))` +
+      `${ethTruncated || usdtTruncated ? ' — SAFETY CAP HIT, see isTruncated/fetchStats in response' : ''}`
+    );
 
     // Parse on-chain balances for mismatch detection
     const onChainEthBalance = ethBalanceParam ? parseFloat(ethBalanceParam) : undefined;
@@ -263,7 +443,8 @@ export async function GET(request: NextRequest) {
       address.toLowerCase(),
       excludedHashes,
       onChainEthBalance,
-      runId
+      runId,
+      ethTruncated
     );
 
     // Calculate cost basis for USDT
@@ -271,7 +452,8 @@ export async function GET(request: NextRequest) {
       usdtTransactions,
       address.toLowerCase(),
       excludedHashes,
-      onChainUsdtBalance
+      onChainUsdtBalance,
+      usdtTruncated
     );
 
     const result: CostBasisResult = {
@@ -327,11 +509,43 @@ export async function GET(request: NextRequest) {
       excludedCount: excludedHashes.length,
     };
 
-    // Add warning if transactions were truncated
-    if (result.eth.isTruncated || result.usdt.isTruncated) {
-      response.warning = "Large wallet detected. Cost basis calculated from oldest 100 transactions. Results may be approximate.";
+    // Add explicit error flag if any pagination fetch hit a real Etherscan
+    // API error (not a legitimate empty result) that survived all retries.
+    // This must never be silently absorbed — the transaction counts and
+    // resulting cost basis above are based on an incomplete, unknown-size
+    // subset of history for the affected source(s).
+    if (fetchErrors.length > 0) {
+      response.fetchError = {
+        severity: 'critical',
+        message: 'One or more Etherscan requests failed after retries. Transaction data may be incomplete for reasons unrelated to truncation or balance mismatch.',
+        errors: fetchErrors,
+      };
     }
-    
+
+    // Add warning if transactions were truncated — explicit, with the exact
+    // fetched counts. We never know Etherscan's true total record count up
+    // front, so we report what was actually fetched and say so honestly
+    // rather than fabricate a total.
+    if (result.eth.isTruncated || result.usdt.isTruncated) {
+      const parts: string[] = [];
+      if (result.eth.isTruncated) {
+        parts.push(
+          `ETH/internal transaction history hit the ${SAFETY_MAX_PAGES}-page pagination safety cap ` +
+          `(fetched ${fetchStats.ethTxFetched} ETH + ${fetchStats.ethInternalTxFetched} internal records across ` +
+          `${fetchStats.ethPagesFetched + fetchStats.ethInternalPagesFetched} page(s); true total is unknown and may be higher — ` +
+          `Etherscan does not honor the full requested page size, so exact record-count caps can't be promised in advance).`
+        );
+      }
+      if (result.usdt.isTruncated) {
+        parts.push(
+          `USDT transaction history hit the ${SAFETY_MAX_PAGES}-page pagination safety cap ` +
+          `(fetched ${fetchStats.usdtTxFetched} records across ${fetchStats.usdtPagesFetched} page(s); true total is unknown and may be higher).`
+        );
+      }
+      response.warning = parts.join(' ') + ' Cost basis is based on this partial history only.';
+      response.fetchStats = fetchStats;
+    }
+
     // Add critical warning if data quality issues detected
     const ethHasIssues = (result.eth.balanceMismatch && result.eth.balanceMismatch > 0.001);
     const usdtHasIssues = (result.usdt.balanceMismatch && result.usdt.balanceMismatch > 0.001);
@@ -371,8 +585,9 @@ async function calculateEthCostBasis(
   transactions: EtherscanTransaction[],
   walletAddress: string,
   excludedHashes: string[],
-  onChainBalance?: number,
-  runId: string = 'initial'
+  onChainBalance: number | undefined,
+  runId: string = 'initial',
+  isTruncated: boolean = false
 ): Promise<CostBasisResult['eth']> {
   // Separate ALL incoming and outgoing transactions (including excluded ones for display)
   const allIncomingTxs = transactions.filter(
@@ -422,17 +637,11 @@ async function calculateEthCostBasis(
 
   console.log(`Found ${allIncomingTxs.length} total incoming (${incomingTxs.length} non-excluded) and ${allOutgoingTxs.length} total outgoing (${outgoingTxs.length} non-excluded) ETH transactions`);
 
-  // Handle large wallets: limit to oldest MAX_TRANSACTIONS for performance
-  let processedIncomingTxs = incomingTxs;
-  let isTruncated = false;
-  
-  if (incomingTxs.length > MAX_TRANSACTIONS) {
-    console.warn(`Large wallet: processing first ${MAX_TRANSACTIONS} of ${incomingTxs.length} incoming transactions`);
-    processedIncomingTxs = incomingTxs.slice(0, MAX_TRANSACTIONS); // Oldest first for FIFO
-    isTruncated = true;
-  }
-
-  console.log(`Processing ${processedIncomingTxs.length} incoming and ${outgoingTxs.length} outgoing ETH transactions for FIFO`);
+  // No local truncation here — the full paginated transaction set (or the
+  // explicit, reported safety-cap subset from fetchAllEtherscanTx) is used
+  // for FIFO in its entirety. `isTruncated` reflects only whether the fetch
+  // layer hit its safety cap, passed in from the caller.
+  console.log(`Processing ${incomingTxs.length} incoming and ${outgoingTxs.length} outgoing ETH transactions for FIFO`);
 
   // Track purchases with FIFO queue.
   // txHash is stored so the client can apply per-lot price overrides by matching
@@ -471,7 +680,7 @@ async function calculateEthCostBasis(
     transactionDetails.push({
       txHash: tx.hash,
       timestamp,
-      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
       direction: 'in',
       asset: 'ETH',
       amount: ethAmount,
@@ -491,7 +700,7 @@ async function calculateEthCostBasis(
     transactionDetails.push({
       txHash: tx.hash,
       timestamp,
-      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
       direction: 'out',
       asset: 'ETH',
       amount: ethAmount,
@@ -504,21 +713,68 @@ async function calculateEthCostBasis(
   // Sort by timestamp (chronological order)
   transactionDetails.sort((a, b) => a.timestamp - b.timestamp);
 
+  // ── Pre-resolve historical prices once per unique date ────────────────────
+  // Previously this awaited getHistoricalEthPrice() once per incoming
+  // transaction, sequentially. With the 100-tx cap removed, a real wallet can
+  // have hundreds or thousands of incoming lots — sequential per-lot lookups
+  // would make such wallets effectively never finish. Resolving once per
+  // unique calendar date (many lots often share a date) and running those
+  // lookups with bounded concurrency cuts network round trips without
+  // changing FIFO semantics: lots are still consumed oldest-first below,
+  // this only changes how their price gets looked up beforehand.
+  const uniqueDates = new Map<string, number>(); // dateStr -> representative timestamp
+  for (const tx of allIncomingTxs) {
+    const ts = parseInt(tx.timeStamp);
+    const dateStr = new Date(ts * 1000).toISOString().slice(0, 10);
+    if (!uniqueDates.has(dateStr)) uniqueDates.set(dateStr, ts);
+  }
+
+  const datePriceMap = new Map<string, { price: number; source: string }>();
+  const dateEntries = Array.from(uniqueDates.entries());
+  const PRICE_LOOKUP_CONCURRENCY = 8;
+  for (let i = 0; i < dateEntries.length; i += PRICE_LOOKUP_CONCURRENCY) {
+    const batch = dateEntries.slice(i, i + PRICE_LOOKUP_CONCURRENCY);
+    const results = await Promise.all(batch.map(([, ts]) => getHistoricalEthPrice(ts)));
+    batch.forEach(([dateStr], idx) => datePriceMap.set(dateStr, results[idx]));
+  }
+  console.log(
+    `Resolved historical prices for ${dateEntries.length} unique date(s) across ${allIncomingTxs.length} incoming ETH tx(s)`
+  );
+
   // Process incoming transactions for FIFO calculation
   for (const tx of allIncomingTxs) {
     const ethAmount = parseFloat(tx.value) / 1e18;
     const timestamp = parseInt(tx.timeStamp);
     const isExcluded = excludedHashes.includes(tx.hash.toLowerCase());
-    const { price: ethPrice, source: priceSource } = await getHistoricalEthPrice(timestamp);
+    const lookupDateStr = new Date(timestamp * 1000).toISOString().slice(0, 10);
+    const { price: ethPrice, source: priceSource } = datePriceMap.get(lookupDateStr)!;
 
     // Update transaction detail with price info
     const detail = transactionDetails.find(d => d.txHash === tx.hash);
     const date = new Date(timestamp * 1000);
-    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+    // Failed/reverted transactions still populate `value` with the amount
+    // that WOULD have been sent, but the call reverted — no ETH actually
+    // moved. Only gas was burned (handled correctly, separately, in the
+    // gas-drain loop below, which is not conditioned on success). Treating
+    // a failed tx's phantom value as a real inbound lot over-credits balance.
+    // Verified against live data: this exact pattern (on the outgoing side)
+    // accounted for the entirety of EF1's 69.06 ETH balance-mismatch gap.
+    // Still visible in the UI transaction list (marked excluded), not
+    // silently dropped — just correctly excluded from cost-basis impact.
+    if (tx.isError === '1') {
+      if (detail) detail.isExcluded = true;
+      console.log(
+        `IN  ${tx.hash.substring(0, 10)}...: FAILED transaction (isError=1) — excluded from FIFO, no value actually transferred`
+      );
+      continue;
+    }
 
     if (ethPrice > 0) {
-      // Incoming lots are always eligible for FIFO (see note above).
-      if (processedIncomingTxs.some(ptx => ptx.hash === tx.hash)) {
+      // Incoming lots are always eligible for FIFO (see note above — the
+      // full incoming set is used, no separate truncated subset anymore).
+      {
         auditLotCounter += 1;
         purchases.push({
           lotNo: auditLotCounter,
@@ -557,7 +813,7 @@ async function calculateEthCostBasis(
       // manual price via the UI "HARGA MISSING" button.
       zeroPriceCount += 1;
 
-      if (processedIncomingTxs.some(ptx => ptx.hash === tx.hash)) {
+      {
         auditLotCounter += 1;
         purchases.push({
           lotNo: auditLotCounter,
@@ -603,7 +859,20 @@ async function calculateEthCostBasis(
     const timestamp = parseInt(tx.timeStamp);
     const isExcluded = excludedHashes.includes(tx.hash.toLowerCase());
     const date = new Date(timestamp * 1000);
-    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+    // Same fix as the incoming loop above: a failed/reverted transaction's
+    // `value` was never actually sent. Consuming FIFO lots for it would
+    // over-subtract balance — this exact bug (8 failed outgoing txs with
+    // nonzero value) accounted for EF1's entire 69.06 ETH balance mismatch.
+    if (tx.isError === '1') {
+      const failDetail = transactionDetails.find(d => d.txHash === tx.hash);
+      if (failDetail) failDetail.isExcluded = true;
+      console.log(
+        `OUT ${tx.hash.substring(0, 10)}...: FAILED transaction (isError=1) — excluded from FIFO, no value actually transferred`
+      );
+      continue;
+    }
 
     console.log(
       `OUT ${tx.hash.substring(0, 10)}...: -${ethAmount.toFixed(4)} ETH${isExcluded ? ' (EXCLUDED)' : ''}`
@@ -710,7 +979,7 @@ async function calculateEthCostBasis(
 
     const timestamp = parseInt(tx.timeStamp);
     const date = new Date(timestamp * 1000);
-    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
     auditOutRows.push({
       txHash: tx.hash,
       dateStr,
@@ -723,32 +992,67 @@ async function calculateEthCostBasis(
     console.log(`⛽ Gas fees drained from FIFO: ${totalGasEth.toFixed(6)} ETH`);
   }
 
-  // ── Bug 2 fix B: Weighted-average reconciliation ─────────────────────────
+  // ── Reconciliation: untracked outflow (bridge/internal tx not captured by
+  // Etherscan txlist) ───────────────────────────────────────────────────────
+  // Previously this blended every remaining lot into a single weighted-average
+  // price (WAC), which silently rewrote the price of every surviving lot and
+  // broke traceability from cost basis back to its originating transaction —
+  // contradicting the system's core auditability claim. Fixed to consume the
+  // shortfall FIFO-style (oldest lot first, same mechanism as gas draining)
+  // so untouched lots keep their original per-unit price and source tx.
   let auditReconciliation: AuditReconciliation | undefined;
 
   if (
     onChainBalance !== undefined &&
     totalEthRemaining > onChainBalance + 0.0001
   ) {
-    const wac = totalEthRemaining > 0 ? totalInvestedUSD / totalEthRemaining : 0;
-    const scale = totalEthRemaining > 0 ? onChainBalance / totalEthRemaining : 0;
+    const shortfall = Number((totalEthRemaining - onChainBalance).toFixed(8));
+    const fifoBeforeReconcile = totalEthRemaining;
+    const costBasisBeforeReconcile = totalInvestedUSD;
+
     console.warn(
-      `🔧 WAC reconciliation: FIFO=${totalEthRemaining.toFixed(6)} ETH → ` +
-      `on-chain=${onChainBalance.toFixed(6)} ETH | WAC=$${wac.toFixed(2)}/ETH | scale=${scale.toFixed(4)}`
+      `🔧 Untracked-outflow reconciliation: FIFO=${totalEthRemaining.toFixed(6)} ETH → ` +
+      `on-chain=${onChainBalance.toFixed(6)} ETH | consuming ${shortfall.toFixed(6)} ETH oldest-lot-first`
+    );
+
+    fifoConsumeEth(shortfall);
+
+    auditReconciliation = {
+      method: 'FIFO-UNTRACKED-OUT',
+      fifoBeforeReconcile,
+      onChainBalance,
+      wac: fifoBeforeReconcile > 0 ? costBasisBeforeReconcile / fifoBeforeReconcile : 0,
+      scaleFactor: fifoBeforeReconcile > 0 ? onChainBalance / fifoBeforeReconcile : 0,
+      adjustedCostBasis: totalInvestedUSD,
+    };
+  } else if (
+    onChainBalance !== undefined &&
+    totalEthRemaining < onChainBalance - 0.0001
+  ) {
+    // ── Under-counted inflow (the opposite failure mode) ────────────────────
+    // FIFO's tracked balance is LOWER than the real on-chain balance — some
+    // ETH arrived through a channel Etherscan's txlist/txlistinternal never
+    // captured. Unlike the untracked-outflow case above, there is no lot to
+    // consume: the missing value's price and origin are unknown, so
+    // fabricating a lot to plug the gap would be worse than reporting it.
+    // Previously this case fell through silently — the audit report printed
+    // "FIFO balance matches on-chain, no reconciliation needed" even when a
+    // large gap existed, because that message only ever checked the
+    // over-counting branch above. Record it explicitly instead.
+    const shortfall = Number((onChainBalance - totalEthRemaining).toFixed(8));
+    console.warn(
+      `⚠️  Under-counted-inflow detected: FIFO=${totalEthRemaining.toFixed(6)} ETH → ` +
+      `on-chain=${onChainBalance.toFixed(6)} ETH | ${shortfall.toFixed(6)} ETH received via a channel not ` +
+      `captured by Etherscan's txlist/txlistinternal — cannot be auto-corrected, no lot fabricated`
     );
     auditReconciliation = {
-      method: 'WAC',
+      method: 'UNDER-COUNTED-INFLOW-DETECTED',
       fifoBeforeReconcile: totalEthRemaining,
       onChainBalance,
-      wac,
-      scaleFactor: scale,
-      adjustedCostBasis: onChainBalance * wac,
+      wac: 0,
+      scaleFactor: 0,
+      adjustedCostBasis: totalInvestedUSD, // unchanged — no correction applied, nothing to adjust
     };
-    for (const lot of purchases) {
-      lot.amount = Number((lot.amount * scale).toFixed(8));
-    }
-    totalInvestedUSD = Number((onChainBalance * wac).toFixed(8));
-    totalEthRemaining = onChainBalance;
   }
 
   const averageCostBasis = totalEthRemaining > 0 ? totalInvestedUSD / totalEthRemaining : 0;
@@ -849,7 +1153,8 @@ async function calculateUsdtCostBasis(
   transactions: EtherscanTransaction[],
   walletAddress: string,
   excludedHashes: string[],
-  onChainBalance?: number
+  onChainBalance: number | undefined,
+  isTruncated: boolean = false
 ): Promise<CostBasisResult['usdt']> {
   // Separate ALL incoming and outgoing transactions (including excluded ones for display)
   const allIncomingTxs = transactions.filter(
@@ -875,23 +1180,19 @@ async function calculateUsdtCostBasis(
 
   console.log(`Found ${allIncomingTxs.length} total incoming (${incomingTxs.length} non-excluded) and ${allOutgoingTxs.length} total outgoing (${outgoingTxs.length} non-excluded) USDT transactions`);
 
-  // Handle large wallets: limit to oldest MAX_TRANSACTIONS for performance
-  let processedIncomingTxs = incomingTxs;
-  let isTruncated = false;
-  
-  if (incomingTxs.length > MAX_TRANSACTIONS) {
-    console.warn(`Large wallet: processing first ${MAX_TRANSACTIONS} of ${incomingTxs.length} incoming transactions`);
-    processedIncomingTxs = incomingTxs.slice(0, MAX_TRANSACTIONS); // Oldest first for FIFO
-    isTruncated = true;
-  }
-
-  console.log(`Processing ${processedIncomingTxs.length} incoming and ${outgoingTxs.length} outgoing USDT transactions`);
+  // No local truncation here — incoming and outgoing both use the full
+  // paginated set in its entirety (this symmetry is what fixes the previous
+  // bug where incoming was capped at 100 but outgoing was not, producing
+  // impossible negative balances for high-volume wallets). `isTruncated`
+  // reflects only whether the fetch layer hit its safety cap, passed in from
+  // the caller — applied identically to both directions.
+  console.log(`Processing ${incomingTxs.length} incoming and ${outgoingTxs.length} outgoing USDT transactions`);
 
   let totalUsdtRemaining = 0;
   const transactionDetails: TransactionDetail[] = [];
 
-  // Process ALL incoming transactions (or limited to MAX_TRANSACTIONS oldest)
-  for (const tx of processedIncomingTxs) {
+  // Process ALL incoming transactions
+  for (const tx of incomingTxs) {
     const usdtAmount = parseFloat(tx.value) / 1e6; // USDT has 6 decimals
     totalUsdtRemaining += usdtAmount;
     const timestamp = parseInt(tx.timeStamp);
@@ -901,7 +1202,7 @@ async function calculateUsdtCostBasis(
     transactionDetails.push({
       txHash: tx.hash,
       timestamp,
-      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
       direction: 'in',
       asset: 'USDT',
       amount: usdtAmount,
@@ -926,7 +1227,7 @@ async function calculateUsdtCostBasis(
     transactionDetails.push({
       txHash: tx.hash,
       timestamp,
-      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }),
       direction: 'out',
       asset: 'USDT',
       amount: usdtAmount,
@@ -964,7 +1265,7 @@ async function calculateUsdtCostBasis(
     totalInvested: totalInvestedUSD,
     averageCostBasis,
     currentBalance: totalUsdtRemaining,
-    transactions: processedIncomingTxs.length,
+    transactions: incomingTxs.length,
     isTruncated,
     transactionDetails,
     fifoBalance: totalUsdtRemaining,
@@ -1001,9 +1302,14 @@ function savePriceCache(cache: Record<string, Record<string, number>>) {
   } catch {}
 }
 
-// ── Hardcoded fallback prices (YYYY-MM-DD → USD) ─────────────────────────────
-// CryptoCompare-verified daily close for every known transaction date.
-// Covers all lots in this wallet so FIFO never hits zeroPriceCount=0.
+// ── Known-date price cache (YYYY-MM-DD → USD) ────────────────────────────────
+// Verified closes for dates already seen in earlier runs (originally captured
+// from the case-study wallet's audit logs). This is a convenience cache, NOT
+// a substitute for the live fallback chain below — a wallet whose transaction
+// dates aren't in this table falls through to Binance/CoinGecko/CryptoCompare
+// like any other date. Do not treat zeroPriceCount=0 on a wallet as evidence
+// the live fallback chain alone is sufficient unless that wallet's dates are
+// absent from this table.
 const ETH_HARDCODED_PRICES: Record<string, number> = {
   // From audit logs — verified prices
   '2022-11-09': 1104.17,
