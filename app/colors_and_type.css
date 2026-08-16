@@ -8,14 +8,14 @@
    Geist Sans + Geist Mono are SIL-OFL open-source variable webfonts.
    We pull them from the official Google Fonts mirror.
    LED Dot-Matrix is the brand-supplied dot-matrix face for hero numerals
-   — the "Nothing Phone NDot" look the brief asked for. Loaded from
-   ../fonts/LED_Dot-Matrix_400.ttf via @font-face below.
+   — the "Nothing Phone NDot" look the brief asked for. Served from
+   public/fonts/LED_Dot-Matrix_400.ttf via @font-face below.
    ──────────────────────────────────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
 
 @font-face {
   font-family: 'LED Dot-Matrix';
-  src: url('./fonts/LED_Dot-Matrix_400.ttf') format('truetype');
+  src: url('/fonts/LED_Dot-Matrix_400.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
