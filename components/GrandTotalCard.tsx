@@ -20,7 +20,7 @@ export default function GrandTotalCard({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div>
           <div className="cf-section-title" style={{ marginBottom: 8 }}>— Total Portfolio Value</div>
-          <div className="cf-display-pixel" style={{ fontSize: 48, color: 'var(--ink)', lineHeight: 1 }}>
+          <div className="cf-display-pixel" style={{ fontSize: 'clamp(26px, 8vw, 48px)', color: 'var(--ink)', lineHeight: 1, overflowWrap: 'anywhere' }}>
             ${safeGrandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>

@@ -99,7 +99,7 @@ export default function PortfolioPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <AppHeader email={user.email} onLogout={handleLogout} />
+      <AppHeader displayName={user.displayName || user.email?.split('@')[0]} onLogout={handleLogout} />
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px 80px' }}>
         {/* Page header */}

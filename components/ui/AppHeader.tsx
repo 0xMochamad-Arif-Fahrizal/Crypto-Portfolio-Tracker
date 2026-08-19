@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/Icon';
@@ -13,14 +13,15 @@ const TABS = [
 ];
 
 interface AppHeaderProps {
-  email?: string | null;
+  displayName?: string | null;
   onLogout?: () => void;
 }
 
-function AppHeader({ email, onLogout }: AppHeaderProps) {
+function AppHeader({ displayName, onLogout }: AppHeaderProps) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const active = useMemo(() => 
+  const active = useMemo(() =>
     TABS.find((t) => pathname.startsWith(t.href))?.id ?? '',
     [pathname]
   );
@@ -48,7 +49,7 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
           gap: 32,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 32, minWidth: 0 }}>
           <Link
             href="/dashboard"
             style={{
@@ -56,6 +57,7 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
               alignItems: 'center',
               gap: 8,
               textDecoration: 'none',
+              flexShrink: 0,
             }}
           >
             <img src="/assets/logo/cryptofolio-mark.svg" width={22} height={22} alt="" />
@@ -80,7 +82,8 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
               }}
             />
           </Link>
-          <nav style={{ display: 'flex', gap: 2 }}>
+          {/* Desktop tabs */}
+          <nav className="hidden md:flex" style={{ gap: 2 }}>
             {TABS.map((t) => (
               <Link
                 key={t.id}
@@ -107,10 +110,12 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
             ))}
           </nav>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {email && (
+
+        {/* Desktop: username + logout */}
+        <div className="hidden md:flex" style={{ alignItems: 'center', gap: 12 }}>
+          {displayName && (
             <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>
-              {email}
+              {displayName}
             </span>
           )}
           {onLogout && (
@@ -124,6 +129,89 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
             </button>
           )}
         </div>
+
+        {/* Mobile hamburger toggle — wrapped in a plain span so `md:hidden`
+            (a Tailwind utility, layered) isn't fought over `display` by
+            `.cf-btn` (unlayered custom CSS always wins layered rules). */}
+        <span className="md:hidden" style={{ flexShrink: 0 }}>
+          <button
+            type="button"
+            className="cf-btn cf-btn-ghost"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{ width: 40, height: 40, padding: 0 }}
+          >
+            <Icon name={menuOpen ? 'x' : 'menu'} size={18} />
+          </button>
+        </span>
+      </div>
+
+      {/* Mobile menu panel: tabs + username + logout */}
+      <div
+        className="md:hidden"
+        style={{
+          maxHeight: menuOpen ? 400 : 0,
+          opacity: menuOpen ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 260ms ease, opacity 200ms ease',
+          borderTop: menuOpen ? '1px solid var(--border)' : 'none',
+        }}
+      >
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '12px 24px', maxWidth: 1200, margin: '0 auto' }}>
+          {TABS.map((t) => (
+            <Link
+              key={t.id}
+              href={t.href}
+              onClick={() => setMenuOpen(false)}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                padding: '10px 12px',
+                borderRadius: 6,
+                color: t.id === active ? 'var(--ink)' : 'var(--ink-2)',
+                background: t.id === active ? 'var(--surface-2)' : 'transparent',
+                fontWeight: t.id === active ? 500 : 400,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Icon name={t.icon} size={14} />
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+        {(displayName || onLogout) && (
+          <div
+            style={{
+              padding: '12px 24px 20px',
+              maxWidth: 1200,
+              margin: '0 auto',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            {displayName && (
+              <span className="cf-ticker" style={{ color: 'var(--ink-3)' }}>
+                {displayName}
+              </span>
+            )}
+            {onLogout && (
+              <button
+                className="cf-btn cf-btn-ghost"
+                onClick={() => { setMenuOpen(false); onLogout(); }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}
+              >
+                <Icon name="log-out" size={14} />
+                Logout
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
@@ -131,7 +219,7 @@ function AppHeader({ email, onLogout }: AppHeaderProps) {
 
 // Custom comparison function for memo
 function arePropsEqual(prevProps: AppHeaderProps, nextProps: AppHeaderProps) {
-  return prevProps.email === nextProps.email && prevProps.onLogout === nextProps.onLogout;
+  return prevProps.displayName === nextProps.displayName && prevProps.onLogout === nextProps.onLogout;
 }
 
 export default memo(AppHeader, arePropsEqual);

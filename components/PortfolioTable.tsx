@@ -71,7 +71,7 @@ function AddLotForm({ onCancel, onAdd }: {
   return (
     <div style={{ padding: 16, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, marginTop: 12 }}>
       <div className="cf-section-title" style={{ marginBottom: 14 }}>— Add Purchase</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5" style={{ marginBottom: 12 }}>
         <div>
           <label className="cf-label">Amount</label>
           <input className="cf-input" inputMode="decimal" placeholder="0.0000" value={amount}
@@ -145,7 +145,7 @@ function LotBreakdown({
   };
 
   return (
-    <div style={{ padding: '4px 24px 20px 62px', background: 'var(--surface-inset)' }}>
+    <div className="pt-1 pr-6 pb-5 pl-4 sm:pl-[62px]" style={{ background: 'var(--surface-inset)' }}>
       {/* Lot table */}
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -266,6 +266,9 @@ export default function PortfolioTable({
     <div className="cf-card" style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
         <div className="cf-section-title">— Manual Assets · {assets.length}</div>
+        {assets.length > 0 && (
+          <span className="cf-ticker md:hidden" style={{ color: 'var(--ink-3)' }}>Geser → </span>
+        )}
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 13 }}>

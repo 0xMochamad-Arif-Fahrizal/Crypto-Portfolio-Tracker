@@ -68,7 +68,7 @@ function TotalCard({ total, lastUpdate }: { total: number; lastUpdate: Date | nu
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
         <div>
           <div className="cf-section-title" style={{ marginBottom: 14 }}>Total Portfolio Value</div>
-          <div className="cf-num cf-display-pixel" style={{ fontSize: 52, lineHeight: 1, letterSpacing: '0.02em', color: 'var(--ink)' }}>
+          <div className="cf-num cf-display-pixel" style={{ fontSize: 'clamp(28px, 8.5vw, 52px)', lineHeight: 1, letterSpacing: '0.02em', color: 'var(--ink)', overflowWrap: 'anywhere' }}>
             {fmt(animated)}
           </div>
           <div className="cf-ticker cf-wrap" style={{ color: 'var(--ink-3)', marginTop: 12 }}>
@@ -301,7 +301,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <AppHeader email={user.email} onLogout={handleLogout} />
+      <AppHeader displayName={user.displayName || user.email?.split('@')[0]} onLogout={handleLogout} />
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px 80px' }}>
         {/* Page header */}
@@ -421,7 +421,12 @@ export default function DashboardPage() {
 
             {/* Holdings table */}
             <div>
-              <div className="cf-section-title" style={{ marginBottom: 12 }}>— Holdings</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="cf-section-title">— Holdings</div>
+                {visibleRows.length > 0 && (
+                  <span className="cf-ticker md:hidden" style={{ color: 'var(--ink-3)' }}>Geser → </span>
+                )}
+              </div>
               <div className="cf-card cf-enter" style={{ padding: 0, overflow: 'hidden', animationDelay: '120ms' }}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 13 }}>

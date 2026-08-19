@@ -294,7 +294,7 @@ export default function WalletPage() {
   if (authLoading || pageLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-        <AppHeader email={user?.email} onLogout={handleLogout} />
+        <AppHeader displayName={user?.displayName || user?.email?.split('@')[0]} onLogout={handleLogout} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ width: 32, height: 32, border: '2px solid var(--border)', borderTopColor: 'var(--ink)', borderRadius: '50%', animation: 'spin 700ms linear infinite', margin: '0 auto 12px' }} />
@@ -486,7 +486,7 @@ export default function WalletPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <AppHeader email={user.email} onLogout={handleLogout} />
+      <AppHeader displayName={user.displayName || user.email?.split('@')[0]} onLogout={handleLogout} />
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px 80px' }}>
         {/* Page header */}
@@ -617,7 +617,7 @@ export default function WalletPage() {
             {/* Add new wallet form */}
             <div className="cf-card" style={{ background: 'var(--surface-inset)' }}>
               <div className="cf-section-title" style={{ marginBottom: 14 }}>Tambah Wallet Baru</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginBottom: 12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-3" style={{ marginBottom: 12 }}>
                 <div>
                   <label className="cf-label">Nama</label>
                   <input className="cf-input" type="text" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="My Main ETH" maxLength={30} />
