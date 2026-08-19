@@ -24,6 +24,7 @@ import AllocationDonutChart, { AssetSlice } from '@/components/charts/Allocation
 import WalletTransactionList from '@/components/WalletTransactionList';
 import AppHeader from '@/components/ui/AppHeader';
 import Icon from '@/components/ui/Icon';
+import { formatWalletError } from '@/lib/formatWalletError';
 
 interface TransactionDetail {
   txHash: string;
@@ -152,7 +153,7 @@ export default function IntegratedPage() {
       saveWalletAddresses(user.uid, { ethAddress: address }).catch(() => {});
       setEthLoading(false);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load wallet data';
+      const msg = formatWalletError(err instanceof Error ? err.message : 'Failed to load wallet data');
       setEthErr(msg); setEthLoading(false);
       setWalletData({ ethBalance: '0', usdtBalance: '0', ethValueUSD: 0, usdtValueUSD: 0, totalWalletValue: 0, isLoaded: false });
     }

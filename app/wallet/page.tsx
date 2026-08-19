@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { clearWalletAddress, getWalletAddresses, saveWalletAddresses } from '@/lib/firestore/wallets';
 import { type WalletBookEntry, addWalletBookEntry, deduplicateWalletBook, deleteWalletBookEntry, getWalletBook, renameWalletBookEntry, setActiveWallet } from '@/lib/firestore/walletBook';
 import { SOL_MINT_TO_COINGECKO } from '@/lib/solanaTokenMap';
+import { formatWalletError } from '@/lib/formatWalletError';
 import AppHeader from '@/components/ui/AppHeader';
 import CoinMark from '@/components/ui/CoinMark';
 import Icon from '@/components/ui/Icon';
@@ -131,7 +132,7 @@ export default function WalletPage() {
       const d = await r.json();
       if (!r.ok) throw new Error(d?.error || 'Gagal mengambil saldo.');
       setEthBalance({ eth: String(d.ethBalance ?? d.eth ?? '0'), usdt: String(d.usdtBalance ?? d.usdt ?? '0'), ethValueUSD: Number(d.ethValueUSD ?? 0), usdtValueUSD: Number(d.usdtValueUSD ?? 0) });
-    } catch (err) { setEthBalErr(err instanceof Error ? err.message : 'Gagal mengambil saldo Ethereum.'); }
+    } catch (err) { setEthBalErr(formatWalletError(err instanceof Error ? err.message : 'Gagal mengambil saldo Ethereum.')); }
     finally { setEthLoading(false); }
   }
 
@@ -176,7 +177,7 @@ export default function WalletPage() {
       const totalValueUsd = sol * solPriceUsd + splValue;
 
       setSolBalance({ sol, solPriceUsd, tokens, totalValueUsd });
-    } catch (err) { setSolBalErr(err instanceof Error ? err.message : 'Gagal mengambil saldo Solana.'); }
+    } catch (err) { setSolBalErr(formatWalletError(err instanceof Error ? err.message : 'Gagal mengambil saldo Solana.')); }
     finally { setSolLoading(false); }
   }
 
