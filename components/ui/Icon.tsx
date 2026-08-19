@@ -3,7 +3,7 @@ import {
   ExternalLink, Check, X, ChevronDown, ChevronRight,
   ChevronUp, ArrowUpRight, ArrowDownRight, AlertTriangle,
   Info, Eye, EyeOff, Search, Wallet, Layers, BarChart3,
-  Coins, LogOut, User,
+  Coins, LogOut, User, Menu,
 } from 'lucide-react';
 
 const ICONS = {
@@ -32,6 +32,7 @@ const ICONS = {
   'coins': Coins,
   'log-out': LogOut,
   'user': User,
+  'menu': Menu,
 } as const;
 
 type IconName = keyof typeof ICONS;

@@ -1,6 +1,12 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
+import Icon from '@/components/ui/Icon';
 
 export default function MarketingHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <header
       style={{
@@ -18,12 +24,48 @@ export default function MarketingHeader() {
           </span>
           <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--ink)' }} />
         </Link>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: 4 }}>
           <a href="/#features" className="cf-btn cf-btn-ghost" style={{ height: 32, textDecoration: 'none' }}>Features</a>
           <a href="/#how" className="cf-btn cf-btn-ghost" style={{ height: 32, textDecoration: 'none' }}>How it works</a>
-          <a href="/#pricing" className="cf-btn cf-btn-ghost" style={{ height: 32, textDecoration: 'none' }}>Pricing</a>
           <Link href="/login" className="cf-btn cf-btn-secondary" style={{ marginLeft: 8, textDecoration: 'none' }}>Login</Link>
           <Link href="/dashboard" className="cf-btn cf-btn-primary" style={{ textDecoration: 'none' }}>Open app →</Link>
+        </nav>
+
+        {/* Mobile hamburger toggle — wrapped in a plain span so `md:hidden`
+            (a Tailwind utility, layered) isn't fought over `display` by
+            `.cf-btn` (unlayered custom CSS always wins layered rules). */}
+        <span className="md:hidden">
+          <button
+            type="button"
+            className="cf-btn cf-btn-ghost"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{ width: 40, height: 40, padding: 0 }}
+          >
+            <Icon name={menuOpen ? 'x' : 'menu'} size={18} />
+          </button>
+        </span>
+      </div>
+
+      {/* Mobile nav panel */}
+      <div
+        className="md:hidden"
+        style={{
+          maxHeight: menuOpen ? 320 : 0,
+          opacity: menuOpen ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 260ms ease, opacity 200ms ease',
+          borderTop: menuOpen ? '1px solid var(--border)' : 'none',
+        }}
+      >
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '12px 24px 20px', maxWidth: 1080, margin: '0 auto' }}>
+          <a href="/#features" className="cf-btn cf-btn-ghost" style={{ justifyContent: 'flex-start', textDecoration: 'none' }} onClick={() => setMenuOpen(false)}>Features</a>
+          <a href="/#how" className="cf-btn cf-btn-ghost" style={{ justifyContent: 'flex-start', textDecoration: 'none' }} onClick={() => setMenuOpen(false)}>How it works</a>
+          <Link href="/login" className="cf-btn cf-btn-secondary" style={{ justifyContent: 'flex-start', textDecoration: 'none', marginTop: 8 }} onClick={() => setMenuOpen(false)}>Login</Link>
+          <Link href="/dashboard" className="cf-btn cf-btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }} onClick={() => setMenuOpen(false)}>Open app →</Link>
         </nav>
       </div>
     </header>
