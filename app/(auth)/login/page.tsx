@@ -68,9 +68,10 @@ export default function LoginPage() {
       <div className="cf-dot-grid" style={{ position: 'absolute', inset: 0, opacity: 0.5 }} />
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 40%, transparent 0%, transparent 40%, var(--bg) 80%)' }} />
 
-      {/* Brand header */}
-      <header style={{ position: 'relative', padding: '24px 32px' }}>
-        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+      {/* Brand header — padding/height matches the landing page & MarketingHeader
+          so the logo sits at the exact same position across every page. */}
+      <header style={{ position: 'relative', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <img src="/assets/logo/cryptofolio-mark.svg" width={22} height={22} alt="" />
           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 15, color: 'var(--ink)', letterSpacing: '-0.01em' }}>CryptoFolio</span>
           <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--ink)' }} />
