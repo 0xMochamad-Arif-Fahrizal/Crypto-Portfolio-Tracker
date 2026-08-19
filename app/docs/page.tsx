@@ -101,10 +101,29 @@ export default function DocsPage() {
       {/* DocBody with sidebar */}
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px 64px' }}>
         <div className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-8 md:gap-14" style={{ alignItems: 'start' }}>
-          {/* TOC Sidebar — horizontal chip row on mobile, sticky vertical list on desktop */}
+          {/* TOC Sidebar — horizontal scrollable chip row on mobile, sticky vertical list on desktop */}
           <aside className="static md:sticky md:top-[88px] md:self-start pt-0 md:pt-11">
-            <nav className="flex flex-row flex-wrap items-center gap-x-4 gap-y-2 md:flex-col md:items-stretch md:gap-0.5">
-              <div className="cf-section-title w-full md:w-auto mb-0 md:mb-3.5" style={{ color: 'var(--ink-3)' }}>On this page</div>
+            <div className="cf-section-title mb-2 md:mb-3.5" style={{ color: 'var(--ink-3)' }}>On this page</div>
+
+            <nav className="flex md:hidden gap-2 overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}>
+              {TOC_SECTIONS.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  style={{
+                    flexShrink: 0,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500,
+                    padding: '7px 12px', borderRadius: 999,
+                    background: 'var(--surface-2)', color: 'var(--ink-2)',
+                    textDecoration: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+
+            <nav className="hidden md:flex md:flex-col md:gap-0.5">
               {TOC_SECTIONS.map((item) => (
                 <a
                   key={item.id}
