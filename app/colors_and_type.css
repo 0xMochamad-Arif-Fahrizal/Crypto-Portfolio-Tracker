@@ -244,10 +244,33 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   padding: var(--s-6);
-  transition: box-shadow var(--dur-base) var(--ease-standard);
+  transition: box-shadow var(--dur-base) var(--ease-standard),
+              transform  var(--dur-base) var(--ease-standard);
 }
-.cf-card:hover { box-shadow: var(--shadow-1); }
+.cf-card:hover { box-shadow: var(--shadow-1); transform: translateY(-2px); }
 .cf-card-flat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--s-6); }
+
+/* ── Scroll reveal ────────────────────────────────────────────────────────
+   Pairs with a small IntersectionObserver hook (useScrollReveal) that adds
+   `.cf-reveal-visible` the first time an element with `data-reveal` scrolls
+   into view. Fade + slide-up + unblur, matching `cf-enter`'s easing so
+   on-load and on-scroll motion feel like the same design language. */
+.cf-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(6px);
+  transition: opacity 700ms var(--ease-standard),
+              transform 700ms var(--ease-standard),
+              filter 700ms var(--ease-standard);
+}
+.cf-reveal.cf-reveal-visible {
+  opacity: 1;
+  transform: none;
+  filter: blur(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-reveal { opacity: 1; transform: none; filter: none; transition: none; }
+}
 
 /* ── Button ───────────────────────────────────────────────────────────── */
 .cf-btn {
@@ -275,6 +298,12 @@ html, body {
 .cf-btn:active { transform: scale(0.98); }
 .cf-btn:focus-visible { outline: 1.5px solid var(--ink); outline-offset: 2px; }
 .cf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Mobile touch target: bump every button to ~44px tall on small screens
+   only — desktop sizing (36px, or any inline height override) is untouched. */
+@media (max-width: 639px) {
+  .cf-btn { min-height: 44px; }
+}
 
 .cf-btn-primary   { background: var(--ink); color: #fff; }
 .cf-btn-primary:hover:not(:disabled) { opacity: 0.88; }

@@ -20,6 +20,14 @@ body {
   min-height: 100vh;
 }
 
+/* Safety net: no element should ever be able to force horizontal page
+   scroll. This does not fix layout bugs — it just guarantees a stray
+   overflow never widens the page itself. Root-cause fixes still happen
+   at the source (grids, tables, font sizes). */
+html, body {
+  overflow-x: hidden;
+}
+
 /* Spin animation for refresh button */
 @keyframes spin {
   from { transform: rotate(0deg); }
