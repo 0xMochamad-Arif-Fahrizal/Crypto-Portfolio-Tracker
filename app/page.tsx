@@ -184,7 +184,7 @@ export default function LandingPage() {
           background: 'radial-gradient(ellipse at 50% 45%, transparent 0%, transparent 30%, var(--bg) 75%)',
         }} />
         <div style={{ position: 'relative', maxWidth: 1080, margin: '0 auto', padding: '96px 24px 64px', textAlign: 'center' }}>
-          <div className="cf-section-title" style={{ marginBottom: 24 }}>
+          <div className="cf-section-title cf-wrap" style={{ marginBottom: 24 }}>
             Crypto portfolio tracker · ETH + SOL · real-time
           </div>
           <h1
